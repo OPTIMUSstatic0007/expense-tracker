@@ -5,8 +5,11 @@ import com.household.ledger.database.DatabaseFactory.dbQuery
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import java.math.BigDecimal
+import java.math.RoundingMode
 
 class TransactionService {
+    private fun normalize(value: BigDecimal): BigDecimal = value.setScale(2, RoundingMode.HALF_UP)
+
     suspend fun getAllTransactions(): List<Transaction> = dbQuery {
         Transactions.selectAll()
             .orderBy(Transactions.date to SortOrder.ASC, Transactions.id to SortOrder.ASC)
@@ -14,27 +17,34 @@ class TransactionService {
     }
 
     suspend fun addTransaction(transaction: Transaction): Transaction? = dbQuery {
+        val amountNormalized = normalize(transaction.amount)
         val insertStatement = Transactions.insert {
             it[date] = transaction.date
             it[entryType] = transaction.entryType
-            it[amount] = transaction.amount
+            it[amount] = amountNormalized
             it[category] = transaction.category
             it[expenseType] = transaction.expenseType
             it[paidTo] = transaction.paidTo
             it[notes] = transaction.notes
-            it[balanceAfter] = BigDecimal.ZERO 
+            it[balanceAfter] = normalize(BigDecimal.ZERO)
         }
+        
+        val newId = insertStatement[Transactions.id]
         
         recalculateBalances()
         
-        insertStatement.resultedValues?.singleOrNull()?.let { rowToTransaction(it) }
+        // Re-fetch to ensure we return the record with its calculated balanceAfter
+        Transactions.select { Transactions.id eq newId }
+            .map { rowToTransaction(it) }
+            .singleOrNull()
     }
 
     suspend fun updateTransaction(id: Int, transaction: Transaction): Boolean = dbQuery {
+        val amountNormalized = normalize(transaction.amount)
         val updated = Transactions.update({ Transactions.id eq id }) {
             it[date] = transaction.date
             it[entryType] = transaction.entryType
-            it[amount] = transaction.amount
+            it[amount] = amountNormalized
             it[category] = transaction.category
             it[expenseType] = transaction.expenseType
             it[paidTo] = transaction.paidTo
@@ -60,18 +70,19 @@ class TransactionService {
             .orderBy(Transactions.date to SortOrder.ASC, Transactions.id to SortOrder.ASC)
             .toList()
         
-        var currentBalance = BigDecimal.ZERO
+        var currentBalance = normalize(BigDecimal.ZERO)
         all.forEach { row ->
             val type = row[Transactions.entryType]
-            val amount = row[Transactions.amount]
-            if (type == "Credit") {
-                currentBalance = currentBalance.add(amount)
+            val amount = normalize(row[Transactions.amount])
+            
+            currentBalance = if (type == "Credit") {
+                currentBalance.add(amount)
             } else {
-                currentBalance = currentBalance.subtract(amount)
+                currentBalance.subtract(amount)
             }
             
             Transactions.update({ Transactions.id eq row[Transactions.id] }) {
-                it[balanceAfter] = currentBalance
+                it[balanceAfter] = normalize(currentBalance)
             }
         }
     }
@@ -80,11 +91,11 @@ class TransactionService {
         id = row[Transactions.id],
         date = row[Transactions.date],
         entryType = row[Transactions.entryType],
-        amount = row[Transactions.amount],
+        amount = normalize(row[Transactions.amount]),
         category = row[Transactions.category],
         expenseType = row[Transactions.expenseType],
         paidTo = row[Transactions.paidTo],
         notes = row[Transactions.notes],
-        balanceAfter = row[Transactions.balanceAfter]
+        balanceAfter = normalize(row[Transactions.balanceAfter])
     )
 }

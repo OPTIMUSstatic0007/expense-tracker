@@ -1,6 +1,7 @@
-const API_BASE_URL = 'http://127.0.0.1:8080/transactions';
-const EXPORT_BASE_URL = 'http://127.0.0.1:8080/export';
-const BACKUP_BASE_URL = 'http://127.0.0.1:8080/backup';
+const API_BASE_URL = '/transactions';
+const EXPORT_BASE_URL = '/export';
+const BACKUP_BASE_URL = '/backup';
+const RESTORE_BASE_URL = '/restore/database';
 
 // State Management
 let transactions = [];
@@ -149,7 +150,7 @@ async function handleRestore(file) {
     formData.append('file', file);
 
     try {
-        const response = await fetch('http://127.0.0.1:8080/restore/database', {
+        const response = await fetch(RESTORE_BASE_URL, {
             method: 'POST',
             body: formData
         });
@@ -184,7 +185,7 @@ function applyFilters() {
             (t.notes && t.notes.toLowerCase().includes(searchTerm));
 
         const [tYear, tMonth] = t.date.split('-');
-        return matchesSearch && (month === "" || tMonth === month) && (year === "" || tYear === year) && (category === "" || t.category === category) && (type === "" || t.entryType === type;
+        return matchesSearch && (month === "" || tMonth === month) && (year === "" || tYear === year) && (category === "" || t.category === category) && (type === "" || t.entryType === type);
     });
 
     renderTable(filtered);
@@ -280,7 +281,7 @@ async function deleteTransaction(id) {
             loadTransactions();
             updateBackupStatus();
         }
-    } catch (e) { showToast('Delete failed', 'error'); }
+    } catch (error) { showToast('Delete failed', 'error'); }
 }
 
 function editTransaction(id) {

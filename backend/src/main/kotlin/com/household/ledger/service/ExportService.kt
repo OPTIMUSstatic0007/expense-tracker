@@ -42,8 +42,11 @@ class ExportService {
         sheet.createRow(rowIdx++).createCell(0).setCellValue("Period: $monthStr / $yearStr")
         rowIdx++ // Gap
 
-        val totalCredit = transactions.filter { it.entryType == "Credit" }.sumOf { it.amount }
-        val totalDebit = transactions.filter { it.entryType == "Debit" }.sumOf { it.amount }
+        // BigDecimal compliant summing
+        val totalCredit = transactions.filter { it.entryType == "Credit" }
+            .fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
+        val totalDebit = transactions.filter { it.entryType == "Debit" }
+            .fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
         val balance = if (transactions.isNotEmpty()) transactions.last().balanceAfter ?: BigDecimal.ZERO else BigDecimal.ZERO
 
         sheet.createRow(rowIdx++).apply {
@@ -61,7 +64,7 @@ class ExportService {
         rowIdx++ // Gap
 
         // Table Header
-        val headers = arrayOf("Date", "Type", "Category", "Payment Mode", "Paid To", "Notes", "Debit (Expense)", "Credit (Added)", "Balance")
+        val headers = arrayOf("Date", "Entry Type", "Category", "Expense Type", "Paid To", "Notes", "Debit", "Credit", "Balance")
         val headerRow = sheet.createRow(rowIdx++)
         headers.forEachIndexed { i, h ->
             val cell = headerRow.createCell(i)
@@ -89,10 +92,7 @@ class ExportService {
             row.createCell(8).setCellValue(t.balanceAfter?.toDouble() ?: 0.0)
         }
 
-        // Auto-size columns
-        for (i in headers.indices) {
-            sheet.autoSizeColumn(i)
-        }
+        for (i in headers.indices) { sheet.autoSizeColumn(i) }
 
         val out = ByteArrayOutputStream()
         workbook.write(out)
@@ -110,15 +110,17 @@ class ExportService {
         val yearStr = if (year.isNullOrEmpty()) "All" else year
         sb.append("Period, $monthStr / $yearStr\n\n")
 
-        val totalCredit = transactions.filter { it.entryType == "Credit" }.sumOf { it.amount }
-        val totalDebit = transactions.filter { it.entryType == "Debit" }.sumOf { it.amount }
+        val totalCredit = transactions.filter { it.entryType == "Credit" }
+            .fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
+        val totalDebit = transactions.filter { it.entryType == "Debit" }
+            .fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
         val balance = if (transactions.isNotEmpty()) transactions.last().balanceAfter ?: BigDecimal.ZERO else BigDecimal.ZERO
 
         sb.append("Total Cash Added, ${totalCredit.toPlainString()}\n")
         sb.append("Total Expenses, ${totalDebit.toPlainString()}\n")
         sb.append("Remaining Balance, ${balance.toPlainString()}\n\n")
 
-        sb.append("Date,Entry Type,Category,Payment Mode,Paid To,Notes,Debit,Credit,Balance\n")
+        sb.append("Date,Entry Type,Category,Expense Type,Paid To,Notes,Debit,Credit,Balance\n")
         
         transactions.forEach { t ->
             val debit = if (t.entryType == "Debit") t.amount.toPlainString() else "0.00"
