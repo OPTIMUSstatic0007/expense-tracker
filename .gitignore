@@ -1,0 +1,25 @@
+# Kotlin / Gradle
+.gradle/
+build/
+out/
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# SQLite database
+*.db
+*.sqlite
+
+# Exported reports
+exports/
+
+# Node modules if ever added later
+node_modules/
