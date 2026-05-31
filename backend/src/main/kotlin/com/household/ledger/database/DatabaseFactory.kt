@@ -1,12 +1,11 @@
 package com.household.ledger.database
 
-import com.household.ledger.models.Transaction
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
+import java.sql.DriverManager
 
 object DatabaseFactory {
     fun init() {
@@ -18,9 +17,20 @@ object DatabaseFactory {
         
         val driverClassName = "org.sqlite.JDBC"
         val jdbcUrl = "jdbc:sqlite:$databasePath/ledger.db"
-        val database = Database.connect(jdbcUrl, driverClassName)
+
+        // 1. Connect Exposed foundation
+        Database.connect(jdbcUrl, driverClassName)
+
+        // 2. Enable WAL mode using raw JDBC connection BEFORE starting any transactions.
+        // SQLite forbids changing journal_mode from within an Exposed transaction block.
+        DriverManager.getConnection(jdbcUrl).use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute("PRAGMA journal_mode=WAL;")
+            }
+        }
         
-        transaction(database) {
+        // 3. Safe to perform schema initialization
+        transaction {
             SchemaUtils.create(Transactions)
         }
     }
