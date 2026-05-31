@@ -1,24 +1,24 @@
-// State management
+// State management for Household Ledger
 let transactions = [
     {
         id: 1,
         date: '2023-10-01',
         type: 'Credit',
-        amount: 5000.00,
-        category: 'Salary',
-        source: 'Bank Transfer',
-        person: 'Employer Inc',
-        notes: 'Monthly payout'
+        amount: 25000.00,
+        category: 'Cash Deposit',
+        source: 'Self',
+        person: 'Home Fund',
+        notes: 'Monthly household budget'
     },
     {
         id: 2,
         date: '2023-10-05',
         type: 'Debit',
-        amount: 45.50,
-        category: 'Utilities',
-        source: 'Credit Card',
-        person: 'Electric Co',
-        notes: 'September Bill'
+        amount: 1200.00,
+        category: 'Groceries',
+        source: 'Cash',
+        person: 'Local Vendor',
+        notes: 'Vegetables and Milk'
     }
 ];
 
@@ -34,6 +34,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTransactions();
 });
 
+// Indian Currency Formatter (₹)
+const currencyFormatter = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2
+});
+
 // Main Load Function
 function loadTransactions() {
     renderTable();
@@ -45,7 +52,7 @@ function renderTable() {
     historyBody.innerHTML = '';
     let runningBalance = 0;
 
-    // Sort transactions by date (optional but professional)
+    // Sort transactions by date
     const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
 
     sortedTransactions.forEach(t => {
@@ -64,7 +71,7 @@ function renderTable() {
                 <div style="font-size: 0.75rem; color: var(--text-muted);">${t.person || ''}</div>
             </td>
             <td>${t.source}</td>
-            <td><span class="stat-label" style="font-size: 0.7rem; color: ${isCredit ? 'var(--success)' : 'var(--danger)'}">${t.type.toUpperCase()}</span></td>
+            <td><span class="stat-label" style="font-size: 0.7rem; color: ${isCredit ? 'var(--success)' : 'var(--danger)'}">${isCredit ? 'ADDED' : 'EXPENSE'}</span></td>
             <td class="text-right">${!isCredit ? t.amount.toFixed(2) : '-'}</td>
             <td class="text-right">${isCredit ? t.amount.toFixed(2) : '-'}</td>
             <td class="text-right" style="font-weight: 600;">${runningBalance.toFixed(2)}</td>
@@ -89,20 +96,23 @@ function updateSummary() {
 
     const balance = totalCredit - totalDebit;
 
-    balanceEl.innerText = `$${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    creditEl.innerText = `$${totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    debitEl.innerText = `$${totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    balanceEl.innerText = currencyFormatter.format(balance);
+    creditEl.innerText = currencyFormatter.format(totalCredit);
+    debitEl.innerText = currencyFormatter.format(totalDebit);
 }
 
 // Add New Transaction
 form.addEventListener('submit', (e) => {
     e.preventDefault();
 
+    const amountVal = parseFloat(document.getElementById('amount').value);
+    if (isNaN(amountVal)) return;
+
     const newTransaction = {
         id: Date.now(),
         date: document.getElementById('date').value,
         type: document.getElementById('type').value,
-        amount: parseFloat(document.getElementById('amount').value),
+        amount: amountVal,
         category: document.getElementById('category').value,
         source: document.getElementById('source').value,
         person: document.getElementById('person').value,
@@ -122,8 +132,24 @@ function deleteTransaction(id) {
     }
 }
 
-// Edit Placeholder
+// Edit Functionality
 function editTransaction(id) {
-    console.log('Edit transaction:', id);
-    alert('Edit functionality will be implemented in the next step. ID: ' + id);
+    const trans = transactions.find(t => t.id === id);
+    if (trans) {
+        // Pre-fill form
+        document.getElementById('date').value = trans.date;
+        document.getElementById('type').value = trans.type;
+        document.getElementById('amount').value = trans.amount;
+        document.getElementById('category').value = trans.category;
+        document.getElementById('source').value = trans.source;
+        document.getElementById('person').value = trans.person;
+        document.getElementById('notes').value = trans.notes;
+
+        // Remove old entry to be replaced on save
+        transactions = transactions.filter(t => t.id !== id);
+        loadTransactions();
+
+        // Scroll to form for better UX on mobile
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 }

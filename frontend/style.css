@@ -1,15 +1,15 @@
 :root {
-    --bg-color: #f8f9fa;
+    --bg-color: #f4f6f8;
     --surface-color: #ffffff;
-    --text-main: #1a1d21;
-    --text-muted: #64748b;
-    --primary: #2563eb;
-    --primary-hover: #1d4ed8;
-    --border-color: #e2e8f0;
-    --success: #10b981;
-    --danger: #ef4444;
-    --table-header: #f1f5f9;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --text-main: #2d3436;
+    --text-muted: #636e72;
+    --primary: #0984e3;
+    --primary-hover: #0773c5;
+    --border-color: #dfe6e9;
+    --success: #00b894;
+    --danger: #d63031;
+    --table-header: #f1f2f6;
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 * {
@@ -22,23 +22,23 @@ body {
     background-color: var(--bg-color);
     color: var(--text-main);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    line-height: 1.5;
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
-    overflow-x: hidden; /* Prevent horizontal scroll on body */
+    overflow-x: hidden;
 }
 
 /* Navbar */
 .navbar {
     background: var(--surface-color);
     border-bottom: 1px solid var(--border-color);
-    padding: 0.75rem 1.5rem;
+    padding: 0.75rem 1rem;
     position: sticky;
     top: 0;
     z-index: 100;
 }
 
 .nav-container {
-    max-width: 1200px;
+    max-width: 1100px;
     margin: 0 auto;
     display: flex;
     justify-content: space-between;
@@ -46,15 +46,14 @@ body {
 }
 
 .brand {
-    font-weight: 600;
-    font-size: 1.1rem;
+    font-weight: 700;
+    font-size: 1.15rem;
     color: var(--text-main);
 }
 
 .brand-sub {
     font-weight: 400;
-    font-size: 0.8rem;
-    color: var(--text-muted);
+    color: var(--primary);
     margin-left: 2px;
 }
 
@@ -64,137 +63,127 @@ body {
     font-weight: 500;
 }
 
-/* Dashboard Layout */
+/* Dashboard Container */
 .dashboard-container {
-    max-width: 1200px;
-    margin: 1.5rem auto;
+    max-width: 1100px;
+    margin: 1rem auto;
     padding: 0 1rem;
 }
 
 /* Summary Grid */
 .summary-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 1rem;
     margin-bottom: 1.5rem;
 }
 
 .stat-card {
     background: var(--surface-color);
-    padding: 1rem;
-    border-radius: 8px;
+    padding: 1.25rem;
+    border-radius: 10px;
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow);
-    display: flex;
-    flex-direction: column;
 }
 
 .stat-label {
+    display: block;
     font-size: 0.75rem;
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.025em;
     font-weight: 600;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.5rem;
 }
 
 .stat-value {
-    font-size: 1.25rem;
-    font-weight: 600;
+    font-size: 1.4rem;
+    font-weight: 700;
 }
 
 .credit-text { color: var(--success); }
 .debit-text { color: var(--danger); }
 
-/* Content Layout - Desktop First */
+/* Content Layout */
 .content-layout {
     display: grid;
-    grid-template-columns: 320px 1fr;
+    grid-template-columns: 340px 1fr;
     gap: 1.5rem;
     align-items: start;
 }
 
-/* Tablet & Large Mobile (Vertical Stack) */
 @media (max-width: 992px) {
     .content-layout {
         grid-template-columns: 1fr;
-    }
-
-    .dashboard-container {
-        margin: 1rem auto;
     }
 }
 
 .form-section, .history-section {
     background: var(--surface-color);
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow);
     overflow: hidden;
-    width: 100%;
 }
 
 .section-header {
-    padding: 0.875rem 1.25rem;
+    padding: 1rem 1.25rem;
+    background: #fbfbfb;
     border-bottom: 1px solid var(--border-color);
-    background: #fafafa;
 }
 
 .section-header h2 {
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 600;
-    color: var(--text-main);
 }
 
-/* Transaction Form */
+/* Entry Form */
 .transaction-form {
     padding: 1.25rem;
 }
 
 .input-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem; /* Better vertical spacing for mobile/WebView */
+    margin-bottom: 1.5rem;
 }
 
-/* Force single column for form fields on smaller screens */
-@media (max-width: 480px) {
-    .input-grid {
-        grid-template-columns: 1fr;
-    }
+/* Desktop optimization for grid if screen is large enough in sidebar */
+@media (min-width: 1200px) {
+    /* Optional: keep it single column for sidebar focus */
 }
 
 .field {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.5rem;
 }
 
 .field label {
     font-size: 0.85rem;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-muted);
 }
 
-/* Improved touch areas for mobile */
 .field input, .field select, .field textarea {
-    padding: 0.75rem; /* Increased padding */
+    padding: 0.8rem;
     border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 1rem; /* Better for mobile to prevent zoom on focus */
-    font-family: inherit;
-    transition: border-color 0.15s ease;
+    border-radius: 8px;
+    font-size: 1rem;
     width: 100%;
+    font-family: inherit;
+    background: #fafafa;
+}
+
+/* Specific fix for Date field width */
+.date-field input {
+    max-width: 100%;
 }
 
 .field input:focus, .field select:focus, .field textarea:focus {
     outline: none;
     border-color: var(--primary);
-}
-
-.notes-field {
-    margin-bottom: 1.25rem;
+    background: #fff;
 }
 
 .btn-primary {
@@ -202,30 +191,30 @@ body {
     background: var(--primary);
     color: white;
     border: none;
-    padding: 0.875rem; /* Larger touch area */
-    border-radius: 6px;
+    padding: 1rem;
+    border-radius: 8px;
     font-weight: 600;
     font-size: 1rem;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: all 0.2s ease;
 }
 
 .btn-primary:hover {
     background: var(--primary-hover);
+    transform: translateY(-1px);
 }
 
 /* Ledger Table */
 .table-wrapper {
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
-    border-radius: 0 0 8px 8px;
+    -webkit-overflow-scrolling: touch;
 }
 
 .ledger-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.875rem;
-    min-width: 700px; /* Ensure table doesn't get squashed */
+    min-width: 800px; /* Prevent compression */
 }
 
 .ledger-table th {
@@ -233,74 +222,63 @@ body {
     color: var(--text-muted);
     font-weight: 600;
     text-align: left;
-    padding: 0.875rem 1rem;
+    padding: 1rem;
     border-bottom: 1px solid var(--border-color);
     white-space: nowrap;
 }
 
 .ledger-table td {
-    padding: 0.875rem 1rem;
+    padding: 1rem;
     border-bottom: 1px solid var(--border-color);
-    color: var(--text-main);
     vertical-align: middle;
 }
 
 .ledger-table tr:hover {
-    background: #f8fafc;
+    background: #f8f9fa;
 }
 
 .text-right { text-align: right; }
 .text-center { text-align: center; }
 
-/* Action Buttons - Larger for Mobile */
+/* Actions */
 .btn-action {
-    padding: 0.5rem 0.75rem;
-    border-radius: 4px;
+    padding: 0.5rem 0.8rem;
+    border-radius: 6px;
     border: 1px solid var(--border-color);
     background: white;
-    font-size: 0.8rem;
-    font-weight: 500;
+    font-size: 0.75rem;
+    font-weight: 600;
     cursor: pointer;
     margin: 0 2px;
-    display: inline-block;
 }
 
-.btn-edit:hover { background: var(--primary); color: white; border-color: var(--primary); }
-.btn-delete:hover { background: var(--danger); color: white; border-color: var(--danger); }
+.btn-edit:hover { background: #e3f2fd; color: var(--primary); border-color: var(--primary); }
+.btn-delete:hover { background: #ffebee; color: var(--danger); border-color: var(--danger); }
 
-/* Android WebView Specific Tweaks */
-@media screen and (max-width: 360px) {
-    body {
-        padding: 0;
-    }
+/* WebView / Small Mobile Optimizations */
+@media (max-width: 480px) {
     .dashboard-container {
-        padding: 0 0.75rem;
+        padding: 0 0.5rem;
+        margin: 0.5rem auto;
     }
-    .stat-value {
-        font-size: 1.1rem;
-    }
-    .navbar {
-        padding: 0.5rem 1rem;
-    }
-    .brand {
-        font-size: 1rem;
-    }
-}
 
-/* Print Styles */
-@media print {
-    .navbar, .form-section, .btn-action {
-        display: none !important;
-    }
-    .dashboard-container {
-        margin: 0;
-        padding: 0;
-    }
-    .content-layout {
-        display: block;
-    }
     .stat-card {
-        border: 1px solid #ccc;
-        box-shadow: none;
+        padding: 1rem;
+    }
+
+    .stat-value {
+        font-size: 1.2rem;
+    }
+
+    .section-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .transaction-form {
+        padding: 1rem;
+    }
+
+    .field input, .field select, .field textarea {
+        padding: 0.7rem;
     }
 }
