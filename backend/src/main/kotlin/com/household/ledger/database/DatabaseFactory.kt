@@ -33,12 +33,12 @@ object Transactions : Table() {
     val id = integer("id").autoIncrement()
     val date = varchar("date", 50)
     val entryType = varchar("entry_type", 20)
-    val amount = double("amount")
+    val amount = decimal("amount", precision = 20, scale = 4)
     val category = varchar("category", 100)
     val expenseType = varchar("expense_type", 100)
     val paidTo = varchar("paid_to", 100)
     val notes = text("notes")
-    val balanceAfter = double("balance_after")
+    val balanceAfter = decimal("balance_after", precision = 20, scale = 4)
 
     override val primaryKey = PrimaryKey(id)
 }

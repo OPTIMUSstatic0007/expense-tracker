@@ -4,6 +4,7 @@ import com.household.ledger.models.Transaction
 import com.household.ledger.database.DatabaseFactory.dbQuery
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import java.math.BigDecimal
 
 class TransactionService {
     suspend fun getAllTransactions(): List<Transaction> = dbQuery {
@@ -21,7 +22,7 @@ class TransactionService {
             it[expenseType] = transaction.expenseType
             it[paidTo] = transaction.paidTo
             it[notes] = transaction.notes
-            it[balanceAfter] = 0.0 // Placeholder, will recalculate
+            it[balanceAfter] = BigDecimal.ZERO 
         }
         
         recalculateBalances()
@@ -59,14 +60,14 @@ class TransactionService {
             .orderBy(Transactions.date to SortOrder.ASC, Transactions.id to SortOrder.ASC)
             .toList()
         
-        var currentBalance = 0.0
+        var currentBalance = BigDecimal.ZERO
         all.forEach { row ->
             val type = row[Transactions.entryType]
             val amount = row[Transactions.amount]
             if (type == "Credit") {
-                currentBalance += amount
+                currentBalance = currentBalance.add(amount)
             } else {
-                currentBalance -= amount
+                currentBalance = currentBalance.subtract(amount)
             }
             
             Transactions.update({ Transactions.id eq row[Transactions.id] }) {
