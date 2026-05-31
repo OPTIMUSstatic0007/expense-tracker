@@ -2,6 +2,7 @@ package com.household.ledger.routes
 
 import com.household.ledger.database.TransactionService
 import com.household.ledger.models.Transaction
+import com.household.ledger.service.ExportService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -10,6 +11,7 @@ import io.ktor.server.routing.*
 
 fun Route.transactionRoutes() {
     val service = TransactionService()
+    val exportService = ExportService()
 
     route("/transactions") {
         get {
@@ -43,6 +45,78 @@ fun Route.transactionRoutes() {
             } else {
                 call.respond(HttpStatusCode.NotFound, "Transaction not found")
             }
+        }
+    }
+
+    route("/export") {
+        get("/excel") {
+            val month = call.request.queryParameters["month"]
+            val year = call.request.queryParameters["year"]
+            val category = call.request.queryParameters["category"]
+            val search = call.request.queryParameters["search"]?.lowercase()
+
+            val all = service.getAllTransactions()
+            val filtered = all.filter { t ->
+                val dateParts = t.date.split("-")
+                val tYear = if (dateParts.isNotEmpty()) dateParts[0] else ""
+                val tMonth = if (dateParts.size > 1) dateParts[1] else ""
+                
+                val matchesMonth = month.isNullOrEmpty() || tMonth == month
+                val matchesYear = year.isNullOrEmpty() || tYear == year
+                val matchesCategory = category.isNullOrEmpty() || t.category == category
+                
+                val s = search
+                val matchesSearch = s.isNullOrEmpty() || 
+                    t.category.lowercase().contains(s) ||
+                    t.paidTo.lowercase().contains(s) ||
+                    t.notes.lowercase().contains(s)
+
+                matchesMonth && matchesYear && matchesCategory && matchesSearch
+            }
+
+            val fileName = "ledger_${month ?: "all"}_${year ?: "all"}.xlsx"
+            val bytes = exportService.generateExcel(filtered, month, year)
+            
+            call.response.header(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, fileName).toString()
+            )
+            call.respondBytes(bytes, ContentType.parse("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        }
+
+        get("/csv") {
+            val month = call.request.queryParameters["month"]
+            val year = call.request.queryParameters["year"]
+            val category = call.request.queryParameters["category"]
+            val search = call.request.queryParameters["search"]?.lowercase()
+
+            val all = service.getAllTransactions()
+            val filtered = all.filter { t ->
+                val dateParts = t.date.split("-")
+                val tYear = if (dateParts.isNotEmpty()) dateParts[0] else ""
+                val tMonth = if (dateParts.size > 1) dateParts[1] else ""
+                
+                val matchesMonth = month.isNullOrEmpty() || tMonth == month
+                val matchesYear = year.isNullOrEmpty() || tYear == year
+                val matchesCategory = category.isNullOrEmpty() || t.category == category
+                
+                val s = search
+                val matchesSearch = s.isNullOrEmpty() || 
+                    t.category.lowercase().contains(s) ||
+                    t.paidTo.lowercase().contains(s) ||
+                    t.notes.lowercase().contains(s)
+
+                matchesMonth && matchesYear && matchesCategory && matchesSearch
+            }
+
+            val fileName = "ledger_${month ?: "all"}_${year ?: "all"}.csv"
+            val csvString = exportService.generateCsv(filtered, month, year)
+            
+            call.response.header(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, fileName).toString()
+            )
+            call.respondText(csvString, ContentType.Text.CSV)
         }
     }
 }

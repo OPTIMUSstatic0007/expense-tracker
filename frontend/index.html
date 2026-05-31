@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <nav class="navbar">
@@ -20,14 +20,28 @@
     </nav>
 
     <main class="dashboard-container">
-        <!-- Summary Dashboard -->
+        <!-- Dashboard Header / Monthly Summary -->
+        <div class="dashboard-header">
+            <div class="header-title">
+                <h1>Financial Overview</h1>
+                <p id="current-view-label">All-time Transactions</p>
+            </div>
+            <div class="header-stats">
+                <div class="mini-stat">
+                    <span class="mini-label">Monthly Balance</span>
+                    <span class="mini-value" id="month-balance">₹0.00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Global Summary Grid -->
         <section class="summary-grid">
             <div class="stat-card">
                 <span class="stat-label">In-Hand Balance</span>
                 <span class="stat-value" id="balance">₹0.00</span>
             </div>
             <div class="stat-card">
-                <span class="stat-label">Cash Added</span>
+                <span class="stat-label">Total Cash Added</span>
                 <span class="stat-value credit-text" id="total-credit">₹0.00</span>
             </div>
             <div class="stat-card">
@@ -37,74 +51,161 @@
         </section>
 
         <div class="content-layout">
-            <!-- Data Entry Section -->
-            <section class="form-section">
-                <div class="section-header">
-                    <h2>Record New Entry</h2>
-                </div>
-                <form id="exp-form" class="transaction-form">
-                    <div class="input-grid">
-                        <div class="field date-field">
-                            <label for="date">Date</label>
-                            <input type="date" id="date" required>
+            <!-- Left Panel: Data Entry -->
+            <aside class="side-panel">
+                <section class="form-section">
+                    <div class="section-header">
+                        <h2>Record New Entry</h2>
+                    </div>
+                    <form id="exp-form" class="transaction-form">
+                        <div class="input-grid">
+                            <div class="field">
+                                <label for="date">Date</label>
+                                <input type="date" id="date" required>
+                            </div>
+                            <div class="field">
+                                <label for="type">Entry Type</label>
+                                <select id="type" required>
+                                    <option value="Debit">Expense (-)</option>
+                                    <option value="Credit">Cash Added (+)</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="amount">Amount (₹)</label>
+                                <input type="number" id="amount" step="0.01" placeholder="0.00" required>
+                            </div>
+                            <div class="field">
+                                <label for="category">Category</label>
+                                <select id="category" required>
+                                    <option value="" disabled selected>Select Category</option>
+                                    <option value="Groceries">Groceries</option>
+                                    <option value="Electricity">Electricity</option>
+                                    <option value="Water">Water</option>
+                                    <option value="Gas">Gas</option>
+                                    <option value="Maintenance">Maintenance</option>
+                                    <option value="Salary">Salary</option>
+                                    <option value="Deposit">Deposit</option>
+                                    <option value="Medical">Medical</option>
+                                    <option value="Rent">Rent</option>
+                                    <option value="Miscellaneous">Miscellaneous</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="source">Payment Mode</label>
+                                <input type="text" id="source" placeholder="e.g. Cash, UPI" required>
+                            </div>
+                            <div class="field">
+                                <label for="person">Paid To / From</label>
+                                <input type="text" id="person" placeholder="Name">
+                            </div>
                         </div>
-                        <div class="field">
-                            <label for="type">Entry Type</label>
-                            <select id="type" required>
-                                <option value="Credit">Cash Added (+)</option>
-                                <option value="Debit">Expense (-)</option>
+                        <div class="field notes-field">
+                            <label for="notes">Notes</label>
+                            <textarea id="notes" rows="2" placeholder="Reference details..."></textarea>
+                        </div>
+                        <button type="submit" id="save-btn" class="btn-primary">Save to Ledger</button>
+                    </form>
+                </section>
+            </aside>
+
+            <!-- Right Panel: Ledger & Filters -->
+            <div class="main-panel">
+                <!-- Filters & Search Bar -->
+                <section class="filter-section">
+                    <div class="filter-header">
+                        <div class="search-bar">
+                            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <input type="text" id="search-input" placeholder="Search transactions...">
+                        </div>
+                        <div class="export-actions">
+                            <button id="export-excel-btn" class="btn-outline">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Excel
+                            </button>
+                            <button id="export-csv-btn" class="btn-outline">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div class="filters-grid">
+                        <div class="filter-field">
+                            <select id="filter-month">
+                                <option value="">All Months</option>
+                                <option value="01">January</option>
+                                <option value="02">February</option>
+                                <option value="03">March</option>
+                                <option value="04">April</option>
+                                <option value="05">May</option>
+                                <option value="06">June</option>
+                                <option value="07">July</option>
+                                <option value="08">August</option>
+                                <option value="09">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
                             </select>
                         </div>
-                        <div class="field">
-                            <label for="amount">Amount (₹)</label>
-                            <input type="number" id="amount" step="0.01" placeholder="0.00" required>
+                        <div class="filter-field">
+                            <select id="filter-year">
+                                <option value="">All Years</option>
+                                <option value="2023">2023</option>
+                                <option value="2024">2024</option>
+                                <option value="2025">2025</option>
+                            </select>
                         </div>
-                        <div class="field">
-                            <label for="category">Category</label>
-                            <input type="text" id="category" placeholder="e.g. Vegetables, Rent" required>
+                        <div class="filter-field">
+                            <select id="filter-category">
+                                <option value="">All Categories</option>
+                                <option value="Groceries">Groceries</option>
+                                <option value="Electricity">Electricity</option>
+                                <option value="Water">Water</option>
+                                <option value="Gas">Gas</option>
+                                <option value="Maintenance">Maintenance</option>
+                                <option value="Salary">Salary</option>
+                                <option value="Deposit">Deposit</option>
+                                <option value="Medical">Medical</option>
+                                <option value="Rent">Rent</option>
+                                <option value="Miscellaneous">Miscellaneous</option>
+                            </select>
                         </div>
-                        <div class="field">
-                            <label for="source">Expense Type</label>
-                            <input type="text" id="source" placeholder="e.g. Cash, UPI" required>
-                        </div>
-                        <div class="field">
-                            <label for="person">Paid To / From</label>
-                            <input type="text" id="person" placeholder="Name">
+                        <div class="filter-field">
+                            <select id="filter-type">
+                                <option value="">All Types</option>
+                                <option value="Credit">Cash Added</option>
+                                <option value="Debit">Expense</option>
+                            </select>
                         </div>
                     </div>
-                    <div class="field notes-field">
-                        <label for="notes">Notes</label>
-                        <textarea id="notes" rows="2" placeholder="Reference details..."></textarea>
-                    </div>
-                    <button type="submit" id="save-btn" class="btn-primary">Save to Ledger</button>
-                </form>
-            </section>
+                </section>
 
-            <!-- Ledger/History Section -->
-            <section class="history-section">
-                <div class="section-header">
-                    <h2>Daily Ledger</h2>
-                </div>
-                <div class="table-wrapper">
-                    <table id="history-table" class="ledger-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Category / Paid To</th>
-                                <th>Exp. Type</th>
-                                <th>Type</th>
-                                <th class="text-right">Expense (₹)</th>
-                                <th class="text-right">Added (₹)</th>
-                                <th class="text-right">Balance (₹)</th>
-                                <th class="text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="history-body">
-                            <!-- Transactions rendered via JavaScript -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                <!-- History Section -->
+                <section class="history-section">
+                    <div class="section-header ledger-header">
+                        <h2>Daily Ledger</h2>
+                        <span class="count-badge" id="record-count">0 Records</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="history-table" class="ledger-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Category / Paid To</th>
+                                    <th>Mode</th>
+                                    <th>Type</th>
+                                    <th class="text-right">Expense (₹)</th>
+                                    <th class="text-right">Added (₹)</th>
+                                    <th class="text-right">Balance (₹)</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-body">
+                                <!-- Transactions rendered via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
         </div>
     </main>
     <script src="app.js"></script>

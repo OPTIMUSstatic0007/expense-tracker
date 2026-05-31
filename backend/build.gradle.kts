@@ -23,12 +23,16 @@ dependencies {
     implementation("org.jetbrains.exposed:exposed-dao:0.44.1")
     implementation("org.jetbrains.exposed:exposed-jdbc:0.44.1")
     implementation("org.xerial:sqlite-jdbc:3.42.0.0")
+
+    // Excel Export (Apache POI)
+    implementation("org.apache.poi:poi:5.2.3")
+    implementation("org.apache.poi:poi-ooxml:5.2.3")
     
     // Logging
     implementation("ch.qos.logback:logback-classic:1.4.11")
     
     testImplementation("io.ktor:ktor-server-tests-jvm:2.3.5")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:1.9.10")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.0.21")
 }
 
 kotlin {
