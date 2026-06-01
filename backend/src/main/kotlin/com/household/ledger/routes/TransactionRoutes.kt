@@ -15,7 +15,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 
-// Background scope for non-blocking backup operations
 private val backupScope = CoroutineScope(Dispatchers.IO)
 
 fun Route.transactionRoutes() {
@@ -32,12 +31,12 @@ fun Route.transactionRoutes() {
             val transaction = call.receive<Transaction>()
             val created = service.addTransaction(transaction)
             if (created != null) {
-                // BACKUP FIX: Run in background to prevent DB locking
                 backupScope.launch {
                     try {
-                        backupService.createAutoBackup()
+                        // PHASE 3A: Optimized Auto Backup (Triggers every 10 transactions)
+                        backupService.onTransactionEvent(service.getAllTransactions())
                     } catch (e: Exception) {
-                        println("Background auto-backup failed: ${e.message}")
+                        println("Optimized backup failed: ${e.message}")
                     }
                 }
                 call.respond(HttpStatusCode.Created, created)
@@ -52,9 +51,9 @@ fun Route.transactionRoutes() {
             if (service.updateTransaction(id, transaction)) {
                 backupScope.launch {
                     try {
-                        backupService.createAutoBackup()
+                        backupService.onTransactionEvent(service.getAllTransactions())
                     } catch (e: Exception) {
-                        println("Background auto-backup failed: ${e.message}")
+                        println("Optimized backup failed: ${e.message}")
                     }
                 }
                 call.respond(HttpStatusCode.OK, "Transaction updated")
@@ -68,9 +67,9 @@ fun Route.transactionRoutes() {
             if (service.deleteTransaction(id)) {
                 backupScope.launch {
                     try {
-                        backupService.createAutoBackup()
+                        backupService.onTransactionEvent(service.getAllTransactions())
                     } catch (e: Exception) {
-                        println("Background auto-backup failed: ${e.message}")
+                        println("Optimized backup failed: ${e.message}")
                     }
                 }
                 call.respond(HttpStatusCode.OK, "Transaction deleted")
@@ -156,7 +155,8 @@ fun Route.transactionRoutes() {
         get("/database") {
             val file = backupService.getDatabaseFile()
             if (file.exists()) {
-                val fileName = backupService.generateBackupFileName()
+                val timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy_MM_dd_HH_mm_ss"))
+                val fileName = "ledger_backup_$timestamp.db"
                 call.response.header(
                     HttpHeaders.ContentDisposition,
                     ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, fileName).toString()
@@ -170,6 +170,20 @@ fun Route.transactionRoutes() {
         get("/status") {
             call.respond(backupService.getBackupStatus())
         }
+
+        // PHASE 3B: Manual Snapshot
+        post("/snapshot") {
+            try {
+                val success = backupService.triggerImmediateBackup("manual", service.getAllTransactions())
+                if (success) {
+                    call.respond(HttpStatusCode.OK, "Restore point created successfully")
+                } else {
+                    call.respond(HttpStatusCode.InternalServerError, "Failed to create restore point")
+                }
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Error: ${e.message}")
+            }
+        }
     }
 
     route("/restore") {
@@ -182,7 +196,8 @@ fun Route.transactionRoutes() {
                     val tempFile = File.createTempFile("restore", ".db")
                     part.streamProvider().use { input -> tempFile.outputStream().use { output -> input.copyTo(output) } }
                     
-                    if (backupService.restoreDatabase(tempFile)) {
+                    // PHASE 3E: Emergency snapshot handled inside service
+                    if (backupService.restoreDatabase(tempFile, service.getAllTransactions())) {
                         restored = true
                     }
                     tempFile.delete()

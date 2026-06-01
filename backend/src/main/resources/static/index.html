@@ -126,7 +126,7 @@
                 <section class="filter-section">
                     <div class="filter-header">
                         <div class="search-bar">
-                            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" x2="16.65" y2="16.65"></line></svg>
                             <input type="text" id="search-input" placeholder="Search transactions (Category, Paid To, Notes)...">
                         </div>
                         <div class="export-actions">
@@ -234,19 +234,24 @@
         <section class="mgmt-section">
             <div class="mgmt-header">
                 <h2>Database Administration</h2>
-                <p>Securely backup your financial data or restore from a previous session.</p>
+                <p>Securely backup your financial data or create restore points for long-term safety.</p>
                 <div class="backup-status-container">
-                    <span class="status-indicator">● Auto-Backup: <span id="backup-status">Active</span></span>
-                    <span class="status-indicator">● Last Backup: <span id="last-backup-time">Never</span></span>
-                    <span class="status-indicator">● Total Backups: <span id="backup-count">0</span></span>
+                    <span class="status-indicator">● Status: <span id="backup-status">Optimized</span></span>
+                    <span class="status-indicator">● Last Sync: <span id="last-backup-time">Never</span></span>
+                    <span class="status-indicator">● Pending: <span id="pending-count">0</span>/10</span>
+                    <span class="status-indicator">● Manual Pts: <span id="manual-count">0</span></span>
                 </div>
             </div>
             <div class="mgmt-actions">
-                <button id="backup-db-btn" class="btn-outline">
-                    <span class="btn-text">Download Backup (.db)</span>
+                <button id="snapshot-db-btn" class="btn-outline" title="Create a permanent manual restore point">
+                    <span class="btn-text">Create Restore Point</span>
                     <span class="btn-loader hidden"></span>
                 </button>
-                <button id="restore-db-btn" class="btn-outline">
+                <button id="backup-db-btn" class="btn-outline" title="Download the current live database file">
+                    <span class="btn-text">Download Current (.db)</span>
+                    <span class="btn-loader hidden"></span>
+                </button>
+                <button id="restore-db-btn" class="btn-outline" title="Restore from a previously saved .db file">
                     <span class="btn-text">Restore from File</span>
                     <span class="btn-loader hidden"></span>
                 </button>

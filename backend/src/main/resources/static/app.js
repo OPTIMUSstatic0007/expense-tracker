@@ -17,11 +17,13 @@ const toastContainer = document.getElementById('toast-container');
 
 // Management Elements
 const backupBtn = document.getElementById('backup-db-btn');
+const snapshotBtn = document.getElementById('snapshot-db-btn');
 const restoreBtn = document.getElementById('restore-db-btn');
 const restoreInput = document.getElementById('restore-input');
 const backupStatusEl = document.getElementById('backup-status');
 const lastBackupTimeEl = document.getElementById('last-backup-time');
-const backupCountEl = document.getElementById('backup-count');
+const pendingCountEl = document.getElementById('pending-count');
+const manualCountEl = document.getElementById('manual-count');
 
 // Summary Elements
 const balanceEl = document.getElementById('balance');
@@ -64,10 +66,11 @@ function setupEventListeners() {
 
     // Backup & Restore
     if (backupBtn) backupBtn.addEventListener('click', () => {
-        showToast('Preparing database backup...', 'info');
+        showToast('Preparing database download...', 'info');
         window.location.href = `${BACKUP_BASE_URL}/database`;
-        setTimeout(updateBackupStatus, 2000);
     });
+
+    if (snapshotBtn) snapshotBtn.addEventListener('click', createRestorePoint);
 
     if (restoreBtn) restoreBtn.addEventListener('click', () => restoreInput.click());
 
@@ -129,13 +132,31 @@ async function updateBackupStatus() {
     try {
         const response = await fetch(`${BACKUP_BASE_URL}/status`);
         if (response.ok) {
-            const status = await response.json();
-            if (backupStatusEl) backupStatusEl.innerText = status.status;
-            if (lastBackupTimeEl) lastBackupTimeEl.innerText = status.lastBackupTime;
-            if (backupCountEl) backupCountEl.innerText = status.backupCount;
+            const s = await response.json();
+            if (backupStatusEl) backupStatusEl.innerText = s.status;
+            if (lastBackupTimeEl) lastBackupTimeEl.innerText = s.lastBackupTime;
+            if (pendingCountEl) pendingCountEl.innerText = s.transactionsSinceLast;
+            if (manualCountEl) manualCountEl.innerText = s.manualCount;
         }
     } catch (e) {
         console.error("Status check failed", e);
+    }
+}
+
+async function createRestorePoint() {
+    setLoading(snapshotBtn, true, 'Create Restore Point');
+    try {
+        const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
+        if (response.ok) {
+            showToast('Restore point created successfully');
+            updateBackupStatus();
+        } else {
+            showToast('Failed to create restore point', 'error');
+        }
+    } catch (e) {
+        showToast('Network error while creating snapshot', 'error');
+    } finally {
+        setLoading(snapshotBtn, false, 'Create Restore Point');
     }
 }
 
@@ -266,7 +287,7 @@ form.addEventListener('submit', async (e) => {
             showToast(editingId ? 'Entry updated' : 'Entry added');
             resetForm();
             loadTransactions();
-            updateBackupStatus(); // Auto backup happened on server
+            updateBackupStatus();
         }
     } catch (e) { showToast('Error saving data', 'error'); }
     finally { setLoading(saveBtn, false, editingId ? 'Update Ledger Entry' : 'Save to Ledger'); }

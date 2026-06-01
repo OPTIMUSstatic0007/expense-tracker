@@ -1,6 +1,6 @@
 plugins {
-    kotlin("jvm")
-    kotlin("plugin.serialization")
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
     application
 }
 
@@ -12,27 +12,32 @@ application {
 }
 
 dependencies {
-    implementation("io.ktor:ktor-server-core-jvm:2.3.5")
-    implementation("io.ktor:ktor-server-netty-jvm:2.3.5")
-    implementation("io.ktor:ktor-server-content-negotiation-jvm:2.3.5")
-    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:2.3.5")
-    implementation("io.ktor:ktor-server-cors-jvm:2.3.5")
+    // Ktor Server
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.netty)
+    implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.server.cors)
     
     // Database (Exposed ORM)
-    implementation("org.jetbrains.exposed:exposed-core:0.44.1")
-    implementation("org.jetbrains.exposed:exposed-dao:0.44.1")
-    implementation("org.jetbrains.exposed:exposed-jdbc:0.44.1")
-    implementation("org.xerial:sqlite-jdbc:3.42.0.0")
+    implementation(libs.exposed.core)
+    implementation(libs.exposed.dao)
+    implementation(libs.exposed.jdbc)
+    implementation(libs.sqlite.jdbc)
+
+    // Serialization for backup metadata
+    implementation(libs.kotlinx.serialization.json)
 
     // Excel Export (Apache POI)
-    implementation("org.apache.poi:poi:5.2.3")
-    implementation("org.apache.poi:poi-ooxml:5.2.3")
+    implementation(libs.poi)
+    implementation(libs.poi.ooxml)
     
     // Logging
-    implementation("ch.qos.logback:logback-classic:1.4.11")
+    implementation(libs.logback)
     
-    testImplementation("io.ktor:ktor-server-tests-jvm:2.3.5")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.0.21")
+    // Testing
+    testImplementation(libs.ktor.server.tests)
+    testImplementation(libs.kotlin.test.junit)
 }
 
 kotlin {
