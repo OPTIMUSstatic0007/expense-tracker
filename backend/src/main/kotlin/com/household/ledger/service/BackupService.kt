@@ -79,6 +79,7 @@ class BackupService {
 
     /**
      * PHASE 3A: Smart Auto Backups
+     * PRODUCTION: Threshold set to 10 transactions.
      */
     fun onTransactionEvent(transactions: List<Transaction>) {
         val meta = loadMeta()
@@ -113,18 +114,25 @@ class BackupService {
 
     /**
      * Requirement: Implement REAL Manual Restore Point snapshots.
+     * Requirement: Implementation of Retention Cleanup with category prefixes.
      */
     private fun performPhysicalBackup(type: String, transactions: List<Transaction>): Boolean {
         val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy_MM_dd_HH_mm_ss"))
         
-        // Requirement 3: Dedicated filename pattern for manual restore points.
-        val prefix = if (type == "manual") "manual_restore_point" else "ledger_backup"
+        // Requirement: Categories and Prefixes
+        val prefix = when(type) {
+            "manual" -> "manual_restore_point"
+            "emergency" -> "emergency_pre_restore"
+            else -> "ledger_backup"
+        }
         val fileName = "${prefix}_$timestamp.db"
         val targetFile = File(baseBackupDir, fileName)
 
-        // Requirement 6: Add backend logs for manual/auto snapshots.
+        // Requirement: Add backend logs for manual/auto snapshots.
         if (type == "manual") {
             logger.info("Manual restore point started")
+        } else if (type == "emergency") {
+            logger.info("Emergency snapshot started")
         } else {
             logger.info("Backup started | Type: $type")
         }
@@ -132,7 +140,7 @@ class BackupService {
         logger.info("Destination: ${baseBackupDir.absolutePath}")
 
         return try {
-            // Requirement 4: NEVER overwrite existing files.
+            // Requirement: NEVER overwrite existing files.
             if (targetFile.exists()) {
                 logger.warn("Snapshot file already exists: ${targetFile.name}. Skipping.")
                 return false
@@ -159,10 +167,9 @@ class BackupService {
             ))
             saveHistory(history)
 
-            // Retention Policy (Manual points are persistent/independent)
-            if (type != "manual") {
-                enforceRetentionPolicy(type)
-            }
+            // Requirement: Automatic Retention Cleanup triggered AFTER successful creation
+            enforceRetentionPolicy(type)
+            
             true
         } catch (e: Exception) {
             logger.error("CRITICAL: Snapshot failed for type $type. Reason: ${e.message}")
@@ -170,25 +177,42 @@ class BackupService {
         }
     }
 
+    /**
+     * Requirement: Intelligent Retention Cleanup System.
+     * PRODUCTION: Handles Auto (20), Manual (10), and Emergency (5) categories.
+     */
     private fun enforceRetentionPolicy(type: String) {
-        if (type != "auto" && type != "emergency") return
+        val (prefix, limit) = when (type) {
+            "auto" -> "ledger_backup_" to 20
+            "manual" -> "manual_restore_point_" to 10
+            "emergency" -> "emergency_pre_restore_" to 5
+            else -> return
+        }
+
+        logger.info("Retention scan started for type: $type (limit: $limit)")
         
-        val limit = if (type == "auto") 10 else 5
         val files = baseBackupDir.listFiles { f -> 
-            f.name.startsWith("ledger_backup_") && f.name.endsWith(".db") 
+            f.name.startsWith(prefix) && f.name.endsWith(".db") 
         } ?: return
         
+        logger.info("Retention scan: found ${files.size} files for category $prefix")
+
         if (files.size > limit) {
+            // Sort by oldest timestamp (using lastModified as primary sort)
             val toDelete = files.sortedByDescending { it.lastModified() }.drop(limit)
+            
             toDelete.forEach { 
-                logger.info("Retention Policy: Deleting old backup ${it.name}")
+                logger.info("Retention Policy: Deleting old excess backup ${it.name}")
                 it.delete() 
             }
+            logger.info("Retention cleanup completed: deleted ${toDelete.size} files.")
+        } else {
+            logger.info("Retention scan: no cleanup needed.")
         }
     }
 
     /**
-     * Requirement 5: Update UI (Manual Pts increments).
+     * Requirement: Update UI (Manual Pts increments).
      */
     fun getBackupStatus(): Map<String, String> {
         val meta = loadMeta()
@@ -204,6 +228,7 @@ class BackupService {
 
     fun restoreDatabase(tempFile: File, currentTransactions: List<Transaction>): Boolean {
         try {
+            // Trigger emergency snapshot with correct category
             performPhysicalBackup("emergency", currentTransactions)
 
             val isValid = tempFile.inputStream().use { input ->
