@@ -31,7 +31,6 @@ class BackupService {
 
     /**
      * Requirement: Resolve database file location reliably.
-     * Prioritizes backend/backend/data/ledger.db as observed in the environment.
      */
     private val dbFile: File by lazy {
         val userDir = System.getProperty("user.dir")
@@ -45,8 +44,7 @@ class BackupService {
     }
 
     /**
-     * Requirement 1: Restore correct backup destination folder.
-     * ALL automatic backups must be written to: backend/backend/data/backups/
+     * Requirement: Store backups in backend/backend/data/backups/
      */
     private val baseBackupDir: File by lazy {
         val dir = File(dbFile.parentFile, "backups")
@@ -57,12 +55,6 @@ class BackupService {
         dir
     }
 
-    // Requirements 1 & 6: Preserve architecture - map types to the same flat backups folder.
-    private val autoDir: File get() = baseBackupDir
-    private val manualDir: File get() = baseBackupDir
-    private val emergencyDir: File get() = baseBackupDir
-    
-    // Metadata Persistence
     private val metaFile: File by lazy { File(baseBackupDir, "backup_meta.json") }
     private val historyFile: File by lazy { File(baseBackupDir, "backup_history.json") }
 
@@ -101,11 +93,18 @@ class BackupService {
         saveMeta(meta)
     }
 
+    /**
+     * Requirement 4: Manual restore points must NOT reset pending auto-backup counters.
+     * Requirement 5: Update Last Sync (lastBackupTime).
+     */
     fun triggerImmediateBackup(type: String, transactions: List<Transaction>): Boolean {
         val success = performPhysicalBackup(type, transactions)
-        if (success && (type == "auto" || type == "manual")) {
+        if (success) {
             val meta = loadMeta()
-            meta.transactionsSinceLastBackup = 0
+            // Only reset counter for auto backups. Manual snapshots remain independent.
+            if (type == "auto") {
+                meta.transactionsSinceLastBackup = 0
+            }
             meta.lastBackupTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
             saveMeta(meta)
         }
@@ -113,36 +112,42 @@ class BackupService {
     }
 
     /**
-     * Requirement: Fix backup output path and snapshot filename generation.
+     * Requirement: Implement REAL Manual Restore Point snapshots.
      */
     private fun performPhysicalBackup(type: String, transactions: List<Transaction>): Boolean {
-        // Requirement 2: Restore timestamp snapshot naming: ledger_backup_YYYY_MM_DD_HH_MM_SS.db
         val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy_MM_dd_HH_mm_ss"))
-        val fileName = "ledger_backup_$timestamp.db"
+        
+        // Requirement 3: Dedicated filename pattern for manual restore points.
+        val prefix = if (type == "manual") "manual_restore_point" else "ledger_backup"
+        val fileName = "${prefix}_$timestamp.db"
         val targetFile = File(baseBackupDir, fileName)
 
-        // Requirement 7: Add backend logs
-        logger.info("Backup started | Type: $type")
-        logger.info("Backup destination path: ${baseBackupDir.absolutePath}")
-        logger.info("Backup snapshot filename: $fileName")
+        // Requirement 6: Add backend logs for manual/auto snapshots.
+        if (type == "manual") {
+            logger.info("Manual restore point started")
+        } else {
+            logger.info("Backup started | Type: $type")
+        }
+        logger.info("Snapshot filename: $fileName")
+        logger.info("Destination: ${baseBackupDir.absolutePath}")
 
         return try {
-            // Requirement 3: Ensure every successful backup creates a NEW snapshot file. DO NOT overwrite.
+            // Requirement 4: NEVER overwrite existing files.
             if (targetFile.exists()) {
-                logger.warn("Backup file already exists: ${targetFile.name}. Skipping to prevent overwrite.")
+                logger.warn("Snapshot file already exists: ${targetFile.name}. Skipping.")
                 return false
             }
 
             if (!dbFile.exists()) {
-                logger.error("Source database file not found: ${dbFile.absolutePath}")
+                val reason = "Source database file not found: ${dbFile.absolutePath}"
+                logger.error("Snapshot failed: $reason")
                 return false
             }
 
-            // Perform the copy
             dbFile.copyTo(targetFile, overwrite = false)
-            logger.info("Backup completed successfully: ${targetFile.absolutePath}")
+            logger.info("Snapshot completed successfully: ${targetFile.absolutePath}")
 
-            // PHASE 3D: Update History Index
+            // Update History Index
             val history = loadHistory()
             val balance = if (transactions.isNotEmpty()) transactions.last().balanceAfter?.toString() ?: "0.00" else "0.00"
             history.add(BackupHistoryItem(
@@ -154,24 +159,21 @@ class BackupService {
             ))
             saveHistory(history)
 
-            // PHASE 3E: Retention Policy Enforcement
-            enforceRetentionPolicy(type)
+            // Retention Policy (Manual points are persistent/independent)
+            if (type != "manual") {
+                enforceRetentionPolicy(type)
+            }
             true
         } catch (e: Exception) {
-            logger.error("CRITICAL: Backup failed for type $type: ${e.message}")
+            logger.error("CRITICAL: Snapshot failed for type $type. Reason: ${e.message}")
             false
         }
     }
 
-    /**
-     * Requirement 6: Preserve architecture - keep retention logic but applied to the flat folder.
-     */
     private fun enforceRetentionPolicy(type: String) {
-        // Only enforce for auto and emergency to avoid deleting manual snapshots
         if (type != "auto" && type != "emergency") return
         
         val limit = if (type == "auto") 10 else 5
-
         val files = baseBackupDir.listFiles { f -> 
             f.name.startsWith("ledger_backup_") && f.name.endsWith(".db") 
         } ?: return
@@ -186,8 +188,7 @@ class BackupService {
     }
 
     /**
-     * Requirement 5: Preserve metadata UI.
-     * Counts are now derived from the history log since files are in a flat folder.
+     * Requirement 5: Update UI (Manual Pts increments).
      */
     fun getBackupStatus(): Map<String, String> {
         val meta = loadMeta()
@@ -203,7 +204,6 @@ class BackupService {
 
     fun restoreDatabase(tempFile: File, currentTransactions: List<Transaction>): Boolean {
         try {
-            // PHASE 3A.2: Automatic emergency backup before restore
             performPhysicalBackup("emergency", currentTransactions)
 
             val isValid = tempFile.inputStream().use { input ->

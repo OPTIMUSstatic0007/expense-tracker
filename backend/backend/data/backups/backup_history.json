@@ -12,5 +12,19 @@
         "timestamp": "2026-06-01T11:35:33.603972200",
         "transactionCount": 28,
         "balanceAtBackup": "10762.15"
+    },
+    {
+        "filename": "ledger_backup_2026_06_01_11_43_20.db",
+        "type": "auto",
+        "timestamp": "2026-06-01T11:43:20.036692500",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "manual_restore_point_2026_06_01_11_44_29.db",
+        "type": "manual",
+        "timestamp": "2026-06-01T11:44:29.323937400",
+        "transactionCount": 31,
+        "balanceAtBackup": "9820.17"
     }
 ]
