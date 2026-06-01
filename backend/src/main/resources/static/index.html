@@ -242,12 +242,17 @@
                 <h2>Database Administration</h2>
                 <p>Securely backup your financial data or restore from a previous session.</p>
                 <div class="backup-status-container">
-                    <span class="status-indicator">● Auto-Backup: <span id="backup-status">Active</span></span>
-                    <span class="status-indicator">● Last Backup: <span id="last-backup-time">Never</span></span>
-                    <span class="status-indicator">● Total Backups: <span id="backup-count">0</span></span>
+                    <span class="status-indicator">● Status: <span id="backup-status">Active</span></span>
+                    <span class="status-indicator">● Last Sync: <span id="last-backup-time">Never</span></span>
+                    <span class="status-indicator">● Auto Backups: <span id="auto-backup-count">0</span></span>
+                    <span class="status-indicator">● Manual Pts: <span id="manual-backup-count">0</span></span>
                 </div>
             </div>
             <div class="mgmt-actions">
+                <button id="snapshot-db-btn" class="btn-outline">
+                    <span class="btn-text">Create Restore Point</span>
+                    <span class="btn-loader hidden"></span>
+                </button>
                 <button id="backup-db-btn" class="btn-outline">
                     <span class="btn-text">Download Backup (.db)</span>
                     <span class="btn-loader hidden"></span>

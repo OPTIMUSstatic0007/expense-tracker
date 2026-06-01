@@ -22,10 +22,12 @@ const loadMoreContainer = document.getElementById('load-more-container');
 // Management Elements
 const backupBtn = document.getElementById('backup-db-btn');
 const restoreBtn = document.getElementById('restore-db-btn');
+const snapshotBtn = document.getElementById('snapshot-db-btn');
 const restoreInput = document.getElementById('restore-input');
 const backupStatusEl = document.getElementById('backup-status');
 const lastBackupTimeEl = document.getElementById('last-backup-time');
-const backupCountEl = document.getElementById('backup-count');
+const autoBackupCountEl = document.getElementById('auto-backup-count');
+const manualBackupCountEl = document.getElementById('manual-backup-count');
 
 // Summary Elements
 const balanceEl = document.getElementById('balance');
@@ -75,6 +77,33 @@ function setupEventListeners() {
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => triggerExport('csv', exportCsvBtn));
 
     // Backup & Restore
+    if (snapshotBtn) snapshotBtn.addEventListener('click', async () => {
+        setLoading(snapshotBtn, true, 'Create Restore Point');
+        if (backupStatusEl) {
+            backupStatusEl.innerText = 'Creating Snapshot';
+            backupStatusEl.className = 'status-working';
+        }
+        try {
+            const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
+            if (response.ok) {
+                if (backupStatusEl) {
+                    backupStatusEl.innerText = 'Restore Point Created';
+                    backupStatusEl.className = 'status-manual';
+                }
+                showToast('Manual restore point created');
+                setTimeout(updateBackupStatus, 2000);
+            } else {
+                showToast('Failed to create snapshot', 'error');
+                updateBackupStatus();
+            }
+        } catch (e) {
+            showToast('Network error', 'error');
+            updateBackupStatus();
+        } finally {
+            setLoading(snapshotBtn, false, 'Create Restore Point');
+        }
+    });
+
     if (backupBtn) backupBtn.addEventListener('click', () => {
         showToast('Preparing database backup...', 'info');
         window.location.href = `${BACKUP_BASE_URL}/database`;
@@ -179,6 +208,9 @@ async function loadTransactions(append = false) {
         }
 
         applyFilters();
+
+        // Use true backend-calculated global totals
+        updateDashboard(null, null, null, data);
     } catch (error) {
         showToast('Connection failed: Server unreachable', 'error');
         console.error(error);
@@ -196,12 +228,30 @@ async function updateBackupStatus() {
         const response = await fetch(`${BACKUP_BASE_URL}/status`);
         if (response.ok) {
             const status = await response.json();
-            if (backupStatusEl) backupStatusEl.innerText = status.status;
+
+            if (backupStatusEl) {
+                backupStatusEl.className = '';
+                if (status.status === 'Pending Sync') {
+                    backupStatusEl.innerText = `Pending: ${status.transactionsSinceLast}/10`;
+                    backupStatusEl.classList.add('status-pending');
+                } else if (status.status === 'Synced') {
+                    backupStatusEl.innerText = 'Synced';
+                    backupStatusEl.classList.add('status-synced');
+                } else {
+                    backupStatusEl.innerText = status.status;
+                }
+            }
+
             if (lastBackupTimeEl) lastBackupTimeEl.innerText = status.lastBackupTime;
-            if (backupCountEl) backupCountEl.innerText = status.backupCount;
+            if (autoBackupCountEl) autoBackupCountEl.innerText = status.autoCount;
+            if (manualBackupCountEl) manualBackupCountEl.innerText = status.manualCount;
         }
     } catch (e) {
         console.error("Status check failed", e);
+        if (backupStatusEl) {
+            backupStatusEl.innerText = 'Sync Error';
+            backupStatusEl.className = 'status-error';
+        }
     }
 }
 
@@ -354,17 +404,20 @@ function renderTable(data) {
     });
 }
 
-function updateDashboard(filtered, selMonth, selYear) {
-    // Note: Dashboard summary still reflects only the LOADED transactions.
-    // In a real production app, we would fetch global summaries from a separate endpoint.
-    const globalInHand = transactions.length > 0 ? parseFloat(transactions[0].balanceAfter) : 0;
-    balanceEl.innerText = currencyFormatter.format(globalInHand);
-    creditEl.innerText = currencyFormatter.format(transactions.filter(t => t.entryType === 'Credit').reduce((s, t) => s + parseFloat(t.amount), 0));
-    debitEl.innerText = currencyFormatter.format(transactions.filter(t => t.entryType === 'Debit').reduce((s, t) => s + parseFloat(t.amount), 0));
+function updateDashboard(filtered, selMonth, selYear, pagedData = null) {
+    if (pagedData) {
+        // Use true backend-calculated global totals
+        balanceEl.innerText = currencyFormatter.format(pagedData.globalBalance);
+        creditEl.innerText = currencyFormatter.format(pagedData.totalCredit);
+        debitEl.innerText = currencyFormatter.format(pagedData.totalDebit);
+    }
 
-    const periodBal = filtered.reduce((s, t) => s + (t.entryType === 'Credit' ? parseFloat(t.amount) : -parseFloat(t.amount)), 0);
-    monthBalanceEl.innerText = (periodBal >= 0 ? '+' : '') + currencyFormatter.format(periodBal);
-    monthBalanceEl.style.color = periodBal >= 0 ? 'var(--primary)' : 'var(--danger)';
+    if (filtered) {
+        // Monthly Balance = monthly credits - monthly debits (from current filtered view)
+        const periodBal = filtered.reduce((s, t) => s + (t.entryType === 'Credit' ? parseFloat(t.amount) : -parseFloat(t.amount)), 0);
+        monthBalanceEl.innerText = (periodBal >= 0 ? '+' : '') + currencyFormatter.format(periodBal);
+        monthBalanceEl.style.color = periodBal >= 0 ? 'var(--primary)' : 'var(--danger)';
+    }
 
     const monthName = selMonth ? filterMonth.options[filterMonth.selectedIndex].text : '';
     currentViewLabel.innerText = (selMonth || selYear) ? `Viewing: ${monthName} ${selYear}`.trim() : 'Viewing: Recent Transactions';

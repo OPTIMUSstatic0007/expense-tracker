@@ -31,12 +31,18 @@ fun Route.transactionRoutes() {
             val total = service.getTotalCount()
             val hasMore = (page * limit) < total
             
+            // Requirement 5: Calculate from complete dataset
+            val (globalBal, totalCr, totalDb) = service.getLedgerOverview()
+            
             call.respond(com.household.ledger.models.PagedTransactionsResponse(
                 transactions = transactions,
                 page = page,
                 limit = limit,
                 total = total,
-                hasMore = hasMore
+                hasMore = hasMore,
+                globalBalance = globalBal.toDouble(),
+                totalCredit = totalCr.toDouble(),
+                totalDebit = totalDb.toDouble()
             ))
         }
 
@@ -46,10 +52,10 @@ fun Route.transactionRoutes() {
             if (created != null) {
                 backupScope.launch {
                     try {
-                        // PHASE 3A: Optimized Auto Backup (Triggers every 10 transactions)
-                        backupService.onTransactionEvent(service.getAllTransactions())
+                        // PHASE 1C-1: Update metadata on ADD
+                        backupService.onTransactionEvent("ADD", service.getAllTransactions())
                     } catch (e: Exception) {
-                        println("Optimized backup failed: ${e.message}")
+                        println("Metadata sync failed: ${e.message}")
                     }
                 }
                 call.respond(HttpStatusCode.Created, created)
@@ -64,9 +70,10 @@ fun Route.transactionRoutes() {
             if (service.updateTransaction(id, transaction)) {
                 backupScope.launch {
                     try {
-                        backupService.onTransactionEvent(service.getAllTransactions())
+                        // PHASE 1C-1: Update metadata on UPDATE
+                        backupService.onTransactionEvent("UPDATE", service.getAllTransactions())
                     } catch (e: Exception) {
-                        println("Optimized backup failed: ${e.message}")
+                        println("Metadata sync failed: ${e.message}")
                     }
                 }
                 call.respond(HttpStatusCode.OK, "Transaction updated")
@@ -80,9 +87,10 @@ fun Route.transactionRoutes() {
             if (service.deleteTransaction(id)) {
                 backupScope.launch {
                     try {
-                        backupService.onTransactionEvent(service.getAllTransactions())
+                        // PHASE 1C-1: Update metadata on DELETE
+                        backupService.onTransactionEvent("DELETE", service.getAllTransactions())
                     } catch (e: Exception) {
-                        println("Optimized backup failed: ${e.message}")
+                        println("Metadata sync failed: ${e.message}")
                     }
                 }
                 call.respond(HttpStatusCode.OK, "Transaction deleted")

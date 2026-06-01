@@ -8,5 +8,8 @@ data class PagedTransactionsResponse(
     val page: Int,
     val limit: Int,
     val total: Long,
-    val hasMore: Boolean
+    val hasMore: Boolean,
+    val globalBalance: Double,
+    val totalCredit: Double,
+    val totalDebit: Double
 )

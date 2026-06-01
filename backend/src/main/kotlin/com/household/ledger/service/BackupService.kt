@@ -12,8 +12,14 @@ import java.nio.charset.StandardCharsets
 
 @Serializable
 data class BackupMeta(
-    var transactionsSinceLastBackup: Int = 0,
-    var lastBackupTime: String = "Never"
+    var pendingMutationCount: Int = 0,
+    var totalMutations: Long = 0,
+    var lastActivityTime: String = "Never",
+    var lastMutationType: String = "NONE",
+    var lastBackupTime: String = "Never",
+    var autoBackupCount: Int = 0,
+    var manualRestorePointCount: Int = 0,
+    var isDirty: Boolean = false
 )
 
 @Serializable
@@ -29,27 +35,26 @@ class BackupService {
     private val logger = LoggerFactory.getLogger(BackupService::class.java)
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
 
-    /**
-     * Requirement: Resolve database file location reliably.
-     */
-    private val dbFile: File by lazy {
-        val userDir = System.getProperty("user.dir")
-        val possiblePaths = listOf(
-            File(userDir, "backend/backend/data/ledger.db"),
-            File(userDir, "backend/data/ledger.db"),
-            File(userDir, "data/ledger.db"),
-            File(userDir, "ledger.db")
-        )
-        possiblePaths.firstOrNull { it.exists() } ?: File(userDir, "backend/backend/data/ledger.db")
+    // Configuration
+    private val MAX_AUTO_BACKUPS = 10
+
+    init {
+        logger.info("Smart Backup Engine initialized | Threshold: 10 | Retention Limit: 10")
     }
 
     /**
-     * Requirement: Store backups in backend/backend/data/backups/
+     * Aligned with DatabaseFactory.kt path resolution.
+     */
+    private val dbFile: File by lazy {
+        File("backend/data/ledger.db")
+    }
+
+    /**
+     * Aligned with DatabaseFactory.kt path resolution.
+     * Backups are stored in backend/data/backups/ relative to the working directory.
      */
     private val baseBackupDir: File by lazy {
-        val userDir = System.getProperty("user.dir")
-        // Absolute fallback to backend/backend/data/backups as requested by user
-        val dir = File(userDir, "backend/backend/data/backups")
+        val dir = File("backend/data/backups")
         if (!dir.exists()) {
             val created = dir.mkdirs()
             logger.info("Created backup directory: ${dir.absolutePath} (Success: $created)")
@@ -63,7 +68,14 @@ class BackupService {
     fun getDatabaseFile(): File = dbFile
 
     private fun loadMeta(): BackupMeta = try {
-        if (metaFile.exists()) json.decodeFromString(metaFile.readText()) else BackupMeta()
+        if (metaFile.exists()) {
+            json.decodeFromString<BackupMeta>(metaFile.readText()).also {
+                // Sync counts from history on load for accuracy
+                val history = loadHistory()
+                it.autoBackupCount = history.count { h -> h.type == "auto" }
+                it.manualRestorePointCount = history.count { h -> h.type == "manual" }
+            }
+        } else BackupMeta()
     } catch (e: Exception) { BackupMeta() }
 
     private fun saveMeta(meta: BackupMeta) { metaFile.writeText(json.encodeToString(meta)) }
@@ -80,48 +92,66 @@ class BackupService {
     }
 
     /**
-     * PHASE 3A: Smart Auto Backups
-     * PRODUCTION: Threshold set to 10 transactions.
+     * PHASE 1C-1: Continuous Smart Backup Metadata Sync
+     * Updates backup_meta.json immediately on every ledger mutation.
      */
-    fun onTransactionEvent(transactions: List<Transaction>) {
+    fun onTransactionEvent(mutationType: String, transactions: List<Transaction>) {
         val meta = loadMeta()
-        meta.transactionsSinceLastBackup++
+        val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
         
-        if (meta.transactionsSinceLastBackup >= 10) {
-            logger.info("Smart Backup: Threshold (10) reached. Auto-backing up...")
-            performPhysicalBackup("auto", transactions)
-            meta.transactionsSinceLastBackup = 0
-            meta.lastBackupTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-        }
+        // 1. Update mutation tracking state
+        meta.pendingMutationCount++
+        meta.totalMutations++
+        meta.lastActivityTime = now
+        meta.lastMutationType = mutationType
+        meta.isDirty = true
+        
+        logger.info("Ledger Mutation: $mutationType | Pending: ${meta.pendingMutationCount} | Total: ${meta.totalMutations}")
+
+        // 2. Persistent metadata write (instant sync)
         saveMeta(meta)
+
+        // 3. Smart Threshold Engine check
+        if (meta.pendingMutationCount >= 10) {
+            logger.info("Smart Backup: Threshold (10) reached. Triggering physical snapshot...")
+            if (performPhysicalBackup("auto", transactions)) {
+                // Refresh meta to get updated counts and reset pending
+                val updatedMeta = loadMeta()
+                updatedMeta.pendingMutationCount = 0
+                updatedMeta.lastBackupTime = now
+                updatedMeta.isDirty = false
+                saveMeta(updatedMeta)
+            }
+        }
     }
 
     /**
-     * Requirement 4: Manual restore points must NOT reset pending auto-backup counters.
-     * Requirement 5: Update Last Sync (lastBackupTime).
+     * Manual Snapshots with hard validation.
      */
     fun triggerImmediateBackup(type: String, transactions: List<Transaction>): Boolean {
         val success = performPhysicalBackup(type, transactions)
         if (success) {
             val meta = loadMeta()
-            // Only reset counter for auto backups. Manual snapshots remain independent.
+            val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+            
             if (type == "auto") {
-                meta.transactionsSinceLastBackup = 0
+                meta.pendingMutationCount = 0
+                meta.isDirty = false
             }
-            meta.lastBackupTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+            meta.lastBackupTime = now
+            // Update counts in meta
+            val history = loadHistory()
+            meta.autoBackupCount = history.count { it.type == "auto" }
+            meta.manualRestorePointCount = history.count { it.type == "manual" }
+            
             saveMeta(meta)
+            return true
         }
-        return success
+        return false
     }
 
-    /**
-     * Requirement: Implement REAL Manual Restore Point snapshots.
-     * Requirement: Implementation of Retention Cleanup with category prefixes.
-     */
     private fun performPhysicalBackup(type: String, transactions: List<Transaction>): Boolean {
         val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy_MM_dd_HH_mm_ss"))
-        
-        // Requirement: Categories and Prefixes
         val prefix = when(type) {
             "manual" -> "manual_restore_point"
             "emergency" -> "emergency_pre_restore"
@@ -130,34 +160,24 @@ class BackupService {
         val fileName = "${prefix}_$timestamp.db"
         val targetFile = File(baseBackupDir, fileName)
 
-        // Requirement: Add backend logs for manual/auto snapshots.
-        if (type == "manual") {
-            logger.info("Manual restore point started")
-        } else if (type == "emergency") {
-            logger.info("Emergency snapshot started")
-        } else {
-            logger.info("Backup started | Type: $type")
-        }
-        logger.info("Snapshot filename: $fileName")
-        logger.info("Destination: ${baseBackupDir.absolutePath}")
+        logger.info("Initiating snapshot | Type: $type | Target: ${targetFile.absolutePath}")
 
         return try {
-            // Requirement: NEVER overwrite existing files.
-            if (targetFile.exists()) {
-                logger.warn("Snapshot file already exists: ${targetFile.name}. Skipping.")
-                return false
-            }
-
             if (!dbFile.exists()) {
-                val reason = "Source database file not found: ${dbFile.absolutePath}"
-                logger.error("Snapshot failed: $reason")
+                logger.error("Snapshot failed: Source database not found at ${dbFile.absolutePath}")
                 return false
             }
 
             dbFile.copyTo(targetFile, overwrite = false)
-            logger.info("Snapshot completed successfully: ${targetFile.absolutePath}")
 
-            // Update History Index
+            if (!targetFile.exists() || targetFile.length() == 0L) {
+                logger.error("Snapshot validation failed")
+                if (targetFile.exists()) targetFile.delete()
+                return false
+            }
+
+            logger.info("Snapshot verified: ${targetFile.name}")
+
             val history = loadHistory()
             val balance = if (transactions.isNotEmpty()) transactions.last().balanceAfter?.toString() ?: "0.00" else "0.00"
             history.add(BackupHistoryItem(
@@ -169,68 +189,72 @@ class BackupService {
             ))
             saveHistory(history)
 
-            // Requirement: Automatic Retention Cleanup triggered AFTER successful creation
+            // Requirement 4: Cleanup happens automatically immediately AFTER successful snapshot creation.
             enforceRetentionPolicy(type)
             
             true
         } catch (e: Exception) {
-            logger.error("CRITICAL: Snapshot failed for type $type. Reason: ${e.message}")
+            logger.error("CRITICAL: Snapshot creation failed: ${e.message}")
+            if (targetFile.exists()) targetFile.delete()
             false
         }
     }
 
     /**
      * Requirement: Intelligent Retention Cleanup System.
-     * PRODUCTION: Handles Auto (20), Manual (10), and Emergency (5) categories.
+     * Implementation of Requirement 1, 2, 3, 5, 6, 7.
      */
     private fun enforceRetentionPolicy(type: String) {
-        val (prefix, limit) = when (type) {
-            "auto" -> "ledger_backup_" to 20
-            "manual" -> "manual_restore_point_" to 10
-            "emergency" -> "emergency_pre_restore_" to 5
-            else -> return
-        }
-
-        logger.info("Retention scan started for type: $type (limit: $limit)")
+        // Requirement 3: Manual restore points must NEVER be deleted.
+        if (type != "auto") return 
         
-        val files = baseBackupDir.listFiles { f -> 
-            f.name.startsWith(prefix) && f.name.endsWith(".db") 
-        } ?: return
+        logger.info("Retention cleanup triggered")
         
-        logger.info("Retention scan: found ${files.size} files for category $prefix")
-
-        if (files.size > limit) {
-            // Sort by oldest timestamp (using lastModified as primary sort)
-            val toDelete = files.sortedByDescending { it.lastModified() }.drop(limit)
+        val history = loadHistory()
+        // Filter only auto backups and sort by oldest first
+        val autoEntries = history.filter { it.type == "auto" }.sortedBy { it.timestamp }
+        
+        if (autoEntries.size > MAX_AUTO_BACKUPS) {
+            val toDeleteCount = autoEntries.size - MAX_AUTO_BACKUPS
+            val itemsToDelete = autoEntries.take(toDeleteCount)
             
-            toDelete.forEach { 
-                logger.info("Retention Policy: Deleting old excess backup ${it.name}")
-                it.delete() 
+            itemsToDelete.forEach { entry ->
+                val file = File(baseBackupDir, entry.filename)
+                // Requirement 7: filesystem-safe verification before deletion
+                if (file.exists()) {
+                    logger.info("Deleting oldest auto-backup: ${entry.filename}")
+                    file.delete()
+                }
+                history.remove(entry)
             }
-            logger.info("Retention cleanup completed: deleted ${toDelete.size} files.")
-        } else {
-            logger.info("Retention scan: no cleanup needed.")
+            
+            // Requirement 5: persist updated state
+            saveHistory(history)
+            
+            // Requirement 5: backup_meta.json counters must resync
+            val meta = loadMeta() // loadMeta automatically resyncs counts from history
+            saveMeta(meta)
+            
+            logger.info("Retention sync completed")
         }
     }
 
-    /**
-     * Requirement: Update UI (Manual Pts increments).
-     */
     fun getBackupStatus(): Map<String, String> {
         val meta = loadMeta()
-        val history = loadHistory()
         return mapOf(
             "lastBackupTime" to meta.lastBackupTime,
-            "transactionsSinceLast" to meta.transactionsSinceLastBackup.toString(),
-            "autoCount" to history.count { it.type == "auto" }.toString(),
-            "manualCount" to history.count { it.type == "manual" }.toString(),
-            "status" to "Optimized"
+            "transactionsSinceLast" to meta.pendingMutationCount.toString(),
+            "autoCount" to meta.autoBackupCount.toString(),
+            "manualCount" to meta.manualRestorePointCount.toString(),
+            "totalMutations" to meta.totalMutations.toString(),
+            "lastActivity" to meta.lastActivityTime,
+            "lastMutationType" to meta.lastMutationType,
+            "status" to if (meta.isDirty) "Pending Sync" else "Synced"
         )
     }
 
     fun restoreDatabase(tempFile: File, currentTransactions: List<Transaction>): Boolean {
         try {
-            // Trigger emergency snapshot with correct category
             performPhysicalBackup("emergency", currentTransactions)
 
             val isValid = tempFile.inputStream().use { input ->
@@ -241,6 +265,14 @@ class BackupService {
             if (!isValid) return false
 
             tempFile.copyTo(dbFile, overwrite = true)
+            
+            // Reset metadata on restore
+            val meta = BackupMeta()
+            val history = loadHistory()
+            meta.autoBackupCount = history.count { it.type == "auto" }
+            meta.manualRestorePointCount = history.count { it.type == "manual" }
+            saveMeta(meta)
+
             return true
         } catch (e: Exception) { 
             logger.error("Restore failed: ${e.message}")

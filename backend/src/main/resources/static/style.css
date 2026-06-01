@@ -521,7 +521,12 @@ body {
     font-weight: 500;
 }
 
-#backup-status { color: var(--success); font-weight: 700; }
+#backup-status { font-weight: 700; transition: color 0.3s ease; }
+#backup-status.status-synced { color: var(--success); }
+#backup-status.status-pending { color: var(--warning); }
+#backup-status.status-working { color: var(--info); }
+#backup-status.status-error { color: var(--danger); }
+#backup-status.status-manual { color: var(--primary); }
 #last-backup-time, #backup-count { color: var(--text-main); font-weight: 600; }
 
 .mgmt-actions {

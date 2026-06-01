@@ -1,3 +1,8 @@
 {
-    "lastBackupTime": "2026-06-01 18:25:07"
+    "totalMutations": 19,
+    "lastActivityTime": "2026-06-02 02:08:50",
+    "lastMutationType": "ADD",
+    "lastBackupTime": "2026-06-02 02:08:50",
+    "autoBackupCount": 10,
+    "manualRestorePointCount": 3
 }

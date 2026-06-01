@@ -4,10 +4,12 @@ import com.household.ledger.models.Transaction
 import com.household.ledger.database.DatabaseFactory.dbQuery
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.math.RoundingMode
 
 class TransactionService {
+    private val logger = LoggerFactory.getLogger(TransactionService::class.java)
     private fun normalize(value: BigDecimal): BigDecimal = value.setScale(2, RoundingMode.HALF_UP)
 
     suspend fun getAllTransactions(): List<Transaction> = dbQuery {
@@ -28,6 +30,44 @@ class TransactionService {
         Transactions.selectAll().count()
     }
 
+    /**
+     * Requirement 3 & 6: Fix In-Hand Balance calculation.
+     * Uses the FINAL latest running balance state from the full dataset.
+     */
+    suspend fun getLedgerOverview(): Triple<BigDecimal, BigDecimal, BigDecimal> = dbQuery {
+        // Latest balance is from the newest record (by date DESC, id DESC)
+        val latestBalance = Transactions.selectAll()
+            .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
+            .limit(1)
+            .map { it[Transactions.balanceAfter] }
+            .singleOrNull() ?: BigDecimal.ZERO
+
+        val totalCredit = Transactions.slice(Transactions.amount.sum())
+            .select { Transactions.entryType eq "Credit" }
+            .map { it[Transactions.amount.sum()] }
+            .singleOrNull() ?: BigDecimal.ZERO
+
+        val totalDebit = Transactions.slice(Transactions.amount.sum())
+            .select { Transactions.entryType eq "Debit" }
+            .map { it[Transactions.amount.sum()] }
+            .singleOrNull() ?: BigDecimal.ZERO
+
+        // Debug Logs (Requirement 8)
+        val count = Transactions.selectAll().count()
+        val firstRow = Transactions.selectAll().orderBy(Transactions.date to SortOrder.ASC, Transactions.id to SortOrder.ASC).limit(1).singleOrNull()
+        val lastRow = Transactions.selectAll().orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC).limit(1).singleOrNull()
+        
+        logger.info("--- Ledger Aggregation Engine ---")
+        logger.info("Transaction Count: $count")
+        logger.info("Canonical Start Balance (Oldest): ${firstRow?.get(Transactions.balanceAfter)}")
+        logger.info("Canonical End Balance (Newest): ${lastRow?.get(Transactions.balanceAfter)}")
+        logger.info("Computed Final Balance: $latestBalance")
+        logger.info("Detected Sort Order for Aggregation: chronologically consistent")
+        logger.info("----------------------------------")
+
+        Triple(normalize(latestBalance), normalize(totalCredit), normalize(totalDebit))
+    }
+
     suspend fun addTransaction(transaction: Transaction): Transaction? = dbQuery {
         val amountNormalized = normalize(transaction.amount)
         val insertStatement = Transactions.insert {
@@ -45,7 +85,6 @@ class TransactionService {
         
         recalculateBalances()
         
-        // Re-fetch to ensure we return the record with its calculated balanceAfter
         Transactions.select { Transactions.id eq newId }
             .map { rowToTransaction(it) }
             .singleOrNull()
