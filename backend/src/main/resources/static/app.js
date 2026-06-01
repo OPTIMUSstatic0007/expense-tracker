@@ -5,6 +5,9 @@ const BACKUP_BASE_URL = '/backup';
 // State Management
 let transactions = [];
 let editingId = null;
+let currentPage = 1;
+let hasMore = false;
+let isLoadingMore = false;
 
 // DOM Elements
 const form = document.getElementById('exp-form');
@@ -13,6 +16,8 @@ const recordCountEl = document.getElementById('record-count');
 const saveBtn = document.getElementById('save-btn');
 const emptyStateEl = document.getElementById('empty-state');
 const toastContainer = document.getElementById('toast-container');
+const loadMoreBtn = document.getElementById('load-more-btn');
+const loadMoreContainer = document.getElementById('load-more-container');
 
 // Management Elements
 const backupBtn = document.getElementById('backup-db-btn');
@@ -52,7 +57,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupEventListeners() {
     [searchInput, filterMonth, filterYear, filterCategory, filterType].forEach(el => {
-        if (el) el.addEventListener('input', () => applyFilters());
+        if (el) el.addEventListener('input', () => {
+            currentPage = 1; // Reset to page 1 on filter
+            loadTransactions(false);
+        });
     });
 
     window.addEventListener('resize', () => {
@@ -83,6 +91,15 @@ function setupEventListeners() {
     form.querySelectorAll('input, select').forEach(input => {
         input.addEventListener('blur', () => validateField(input));
     });
+
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', () => {
+            if (!isLoadingMore && hasMore) {
+                currentPage++;
+                loadTransactions(true);
+            }
+        });
+    }
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -92,7 +109,6 @@ const currencyFormatter = new Intl.NumberFormat('en-IN', {
 function formatMobileDate(dateStr) {
     try {
         if (!dateStr) return '-';
-        // The image shows YYYY-MM-DD format for mobile too
         return dateStr;
     } catch (e) { return dateStr; }
 }
@@ -126,23 +142,52 @@ function setLoading(btn, isLoading, originalText) {
 
 // --- Data Operations ---
 
-async function loadTransactions() {
-    try {
-        const response = await fetch(API_BASE_URL);
-        if (!response.ok) throw new Error('Fetch failed');
-        transactions = await response.json();
+async function loadTransactions(append = false) {
+    if (isLoadingMore) return;
+    isLoadingMore = true;
 
-        // Auto-select current year only if it has records
-        const currentYear = new Date().getFullYear().toString();
-        const hasCurrentYearRecords = transactions.some(t => t.date.startsWith(currentYear));
-        if (hasCurrentYearRecords && filterYear) {
-            filterYear.value = currentYear;
+    if (loadMoreBtn) {
+        loadMoreBtn.innerText = 'Loading...';
+        loadMoreBtn.disabled = true;
+    }
+
+    try {
+        // Fetch paginated results
+        const response = await fetch(`${API_BASE_URL}?page=${currentPage}&limit=30`);
+        if (!response.ok) throw new Error('Fetch failed');
+        const data = await response.json();
+
+        if (append) {
+            transactions = [...transactions, ...data.transactions];
+        } else {
+            transactions = data.transactions;
+        }
+
+        hasMore = data.hasMore;
+
+        if (loadMoreContainer) {
+            loadMoreContainer.classList.toggle('hidden', !hasMore);
+        }
+
+        // Only auto-select year on first load of first page
+        if (!append && currentPage === 1) {
+            const currentYear = new Date().getFullYear().toString();
+            const hasCurrentYearRecords = transactions.some(t => t.date.startsWith(currentYear));
+            if (hasCurrentYearRecords && filterYear && !filterYear.value) {
+                filterYear.value = currentYear;
+            }
         }
 
         applyFilters();
     } catch (error) {
         showToast('Connection failed: Server unreachable', 'error');
         console.error(error);
+    } finally {
+        isLoadingMore = false;
+        if (loadMoreBtn) {
+            loadMoreBtn.innerText = 'Load More Transactions';
+            loadMoreBtn.disabled = false;
+        }
     }
 }
 
@@ -178,6 +223,7 @@ async function handleRestore(file) {
 
         if (response.ok) {
             showToast('Database restored successfully');
+            currentPage = 1;
             await loadTransactions();
             updateBackupStatus();
         } else {
@@ -237,7 +283,6 @@ function renderTable(data) {
         const row = document.createElement('tr');
 
         if (isMobile) {
-            // Updated Structure to match user image exactly
             row.innerHTML = `
                 <div class="row-compact" onclick="toggleRow(this)">
                     <div class="mobile-date-col">${t.date}</div>
@@ -281,7 +326,6 @@ function renderTable(data) {
                 </div>
             `;
         } else {
-            // Standard Table DOM for Desktop
             row.innerHTML = `
                 <td data-label="Date">
                     <span class="desktop-date">${t.date}</span>
@@ -311,7 +355,9 @@ function renderTable(data) {
 }
 
 function updateDashboard(filtered, selMonth, selYear) {
-    const globalInHand = transactions.length > 0 ? parseFloat(transactions[transactions.length - 1].balanceAfter) : 0;
+    // Note: Dashboard summary still reflects only the LOADED transactions.
+    // In a real production app, we would fetch global summaries from a separate endpoint.
+    const globalInHand = transactions.length > 0 ? parseFloat(transactions[0].balanceAfter) : 0;
     balanceEl.innerText = currencyFormatter.format(globalInHand);
     creditEl.innerText = currencyFormatter.format(transactions.filter(t => t.entryType === 'Credit').reduce((s, t) => s + parseFloat(t.amount), 0));
     debitEl.innerText = currencyFormatter.format(transactions.filter(t => t.entryType === 'Debit').reduce((s, t) => s + parseFloat(t.amount), 0));
@@ -321,7 +367,7 @@ function updateDashboard(filtered, selMonth, selYear) {
     monthBalanceEl.style.color = periodBal >= 0 ? 'var(--primary)' : 'var(--danger)';
 
     const monthName = selMonth ? filterMonth.options[filterMonth.selectedIndex].text : '';
-    currentViewLabel.innerText = (selMonth || selYear) ? `Viewing: ${monthName} ${selYear}`.trim() : 'Viewing: All-time Transactions';
+    currentViewLabel.innerText = (selMonth || selYear) ? `Viewing: ${monthName} ${selYear}`.trim() : 'Viewing: Recent Transactions';
 }
 
 function toggleRow(element) {
@@ -373,6 +419,7 @@ form.addEventListener('submit', async (e) => {
         if (response.ok) {
             showToast(editingId ? 'Entry updated' : 'Entry added');
             resetForm();
+            currentPage = 1;
             loadTransactions();
             updateBackupStatus();
         }
@@ -386,6 +433,7 @@ async function deleteTransaction(id) {
         const response = await fetch(`${API_BASE_URL}/${id}`, { method: 'DELETE' });
         if (response.ok) {
             showToast('Deleted');
+            currentPage = 1;
             loadTransactions();
             updateBackupStatus();
         }

@@ -12,8 +12,20 @@ class TransactionService {
 
     suspend fun getAllTransactions(): List<Transaction> = dbQuery {
         Transactions.selectAll()
-            .orderBy(Transactions.date to SortOrder.ASC, Transactions.id to SortOrder.ASC)
+            .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
             .map { rowToTransaction(it) }
+    }
+
+    suspend fun getPagedTransactions(page: Int, limit: Int): List<Transaction> = dbQuery {
+        val offset = ((page - 1) * limit).toLong()
+        Transactions.selectAll()
+            .orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC)
+            .limit(limit, offset = offset)
+            .map { rowToTransaction(it) }
+    }
+
+    suspend fun getTotalCount(): Long = dbQuery {
+        Transactions.selectAll().count()
     }
 
     suspend fun addTransaction(transaction: Transaction): Transaction? = dbQuery {

@@ -539,6 +539,35 @@ body {
     text-align: center;
 }
 
+/* Load More */
+.load-more-container {
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+}
+
+.btn-load-more {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    color: var(--primary);
+    padding: 10px 24px;
+    border-radius: var(--border-radius-md);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-load-more:hover {
+    background: var(--primary-soft);
+    border-color: var(--primary);
+}
+
+.btn-load-more:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
 /* Toast Notifications */
 .toast-container {
     position: fixed;

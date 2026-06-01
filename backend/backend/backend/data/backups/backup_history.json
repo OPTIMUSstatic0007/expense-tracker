@@ -19,5 +19,12 @@
         "timestamp": "2026-06-01T18:47:14.183531100",
         "transactionCount": 0,
         "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_01_19_02_58.db",
+        "type": "auto",
+        "timestamp": "2026-06-01T19:02:58.070254200",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
     }
 ]

@@ -5,6 +5,9 @@ const BACKUP_BASE_URL = '/backup';
 // State Management
 let transactions = [];
 let editingId = null;
+let currentPage = 1;
+let hasMore = false;
+let isLoadingMore = false;
 
 // DOM Elements
 const form = document.getElementById('exp-form');
@@ -13,6 +16,8 @@ const recordCountEl = document.getElementById('record-count');
 const saveBtn = document.getElementById('save-btn');
 const emptyStateEl = document.getElementById('empty-state');
 const toastContainer = document.getElementById('toast-container');
+const loadMoreBtn = document.getElementById('load-more-btn');
+const loadMoreContainer = document.getElementById('load-more-container');
 
 // Management Elements
 const backupBtn = document.getElementById('backup-db-btn');
@@ -52,7 +57,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupEventListeners() {
     [searchInput, filterMonth, filterYear, filterCategory, filterType].forEach(el => {
-        if (el) el.addEventListener('input', () => applyFilters());
+        if (el) el.addEventListener('input', () => {
+            currentPage = 1; // Reset to page 1 on filter
+            loadTransactions(false);
+        });
     });
 
     window.addEventListener('resize', () => {
@@ -83,6 +91,15 @@ function setupEventListeners() {
     form.querySelectorAll('input, select').forEach(input => {
         input.addEventListener('blur', () => validateField(input));
     });
+
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', () => {
+            if (!isLoadingMore && hasMore) {
+                currentPage++;
+                loadTransactions(true);
+            }
+        });
+    }
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -92,11 +109,7 @@ const currencyFormatter = new Intl.NumberFormat('en-IN', {
 function formatMobileDate(dateStr) {
     try {
         if (!dateStr) return '-';
-        const parts = dateStr.split('-');
-        if (parts.length < 3) return dateStr;
-        const [y, m, d] = parts;
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        return `${d} ${months[parseInt(m) - 1]}`;
+        return dateStr;
     } catch (e) { return dateStr; }
 }
 
@@ -129,23 +142,52 @@ function setLoading(btn, isLoading, originalText) {
 
 // --- Data Operations ---
 
-async function loadTransactions() {
-    try {
-        const response = await fetch(API_BASE_URL);
-        if (!response.ok) throw new Error('Fetch failed');
-        transactions = await response.json();
+async function loadTransactions(append = false) {
+    if (isLoadingMore) return;
+    isLoadingMore = true;
 
-        // Auto-select current year only if it has records
-        const currentYear = new Date().getFullYear().toString();
-        const hasCurrentYearRecords = transactions.some(t => t.date.startsWith(currentYear));
-        if (hasCurrentYearRecords && filterYear) {
-            filterYear.value = currentYear;
+    if (loadMoreBtn) {
+        loadMoreBtn.innerText = 'Loading...';
+        loadMoreBtn.disabled = true;
+    }
+
+    try {
+        // Fetch paginated results
+        const response = await fetch(`${API_BASE_URL}?page=${currentPage}&limit=30`);
+        if (!response.ok) throw new Error('Fetch failed');
+        const data = await response.json();
+
+        if (append) {
+            transactions = [...transactions, ...data.transactions];
+        } else {
+            transactions = data.transactions;
+        }
+
+        hasMore = data.hasMore;
+
+        if (loadMoreContainer) {
+            loadMoreContainer.classList.toggle('hidden', !hasMore);
+        }
+
+        // Only auto-select year on first load of first page
+        if (!append && currentPage === 1) {
+            const currentYear = new Date().getFullYear().toString();
+            const hasCurrentYearRecords = transactions.some(t => t.date.startsWith(currentYear));
+            if (hasCurrentYearRecords && filterYear && !filterYear.value) {
+                filterYear.value = currentYear;
+            }
         }
 
         applyFilters();
     } catch (error) {
         showToast('Connection failed: Server unreachable', 'error');
         console.error(error);
+    } finally {
+        isLoadingMore = false;
+        if (loadMoreBtn) {
+            loadMoreBtn.innerText = 'Load More Transactions';
+            loadMoreBtn.disabled = false;
+        }
     }
 }
 
@@ -181,6 +223,7 @@ async function handleRestore(file) {
 
         if (response.ok) {
             showToast('Database restored successfully');
+            currentPage = 1;
             await loadTransactions();
             updateBackupStatus();
         } else {
@@ -240,56 +283,45 @@ function renderTable(data) {
         const row = document.createElement('tr');
 
         if (isMobile) {
-            // Optimized Compact DOM with Accordion for Mobile
             row.innerHTML = `
                 <div class="row-compact" onclick="toggleRow(this)">
-                    <td data-label="Date">
-                        <span class="mobile-date">${formatMobileDate(t.date)}</span>
-                    </td>
-                    <td data-label="Transaction">
-                        <div class="row-main">
-                            <div class="transaction-info">
-                                <div class="category-cell">${escapeHtml(t.category)}</div>
-                            </div>
-                            <div class="mobile-amount ${isCredit ? 'credit-text' : 'debit-text'}">
-                                ${isCredit ? '+' : '-'}₹${parseFloat(t.amount).toFixed(2)}
-                            </div>
-                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </div>
-                    </td>
+                    <div class="mobile-date-col">${t.date}</div>
+                    <div class="mobile-indicator">
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </div>
+                    <div class="mobile-category-col">${escapeHtml(t.category)}</div>
+                    <div class="mobile-amount-col ${isCredit ? 'credit-text' : 'debit-text'}">
+                        ${isCredit ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </div>
                 </div>
                 <div class="row-details">
                     <div class="details-grid">
                         <div class="detail-item">
-                            <span class="detail-label">Full Date</span>
-                            <span class="detail-value">${t.date}</span>
+                            <span class="detail-label">PAID TO / FROM</span>
+                            <span class="detail-value">${escapeHtml(t.paidTo || '-')}</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-label">Entry Type</span>
+                            <span class="detail-label">EXPENSE TYPE</span>
+                            <span class="detail-value">${escapeHtml(t.expenseType || '-')}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">BALANCE AFTER</span>
+                            <span class="detail-value">₹${parseFloat(t.balanceAfter).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">ENTRY TYPE</span>
                             <span class="detail-value">${t.entryType}</span>
                         </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Paid To / From</span>
-                            <span class="detail-value">${escapeHtml(t.paidTo || '—')}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Method</span>
-                            <span class="detail-value">${escapeHtml(t.expenseType || '—')}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Balance After</span>
-                            <span class="detail-value">₹${parseFloat(t.balanceAfter).toFixed(2)}</span>
-                        </div>
                         <div class="detail-item detail-full-width">
-                            <span class="detail-label">Notes</span>
+                            <span class="detail-label">NOTES / REFERENCE</span>
                             <span class="detail-value">${escapeHtml(t.notes || 'No reference notes')}</span>
                         </div>
                     </div>
                     <div class="details-actions">
-                        <button class="btn-action btn-edit" onclick="event.stopPropagation(); editTransaction(${t.id})">Edit Entry</button>
-                        <button class="btn-action btn-delete" onclick="event.stopPropagation(); deleteTransaction(${t.id})">Delete</button>
+                        <button class="btn-action-mobile" onclick="event.stopPropagation(); editTransaction(${t.id})">Edit Entry</button>
+                        <button class="btn-action-mobile" onclick="event.stopPropagation(); deleteTransaction(${t.id})">Delete</button>
                     </div>
                 </div>
             `;
@@ -323,7 +355,9 @@ function renderTable(data) {
 }
 
 function updateDashboard(filtered, selMonth, selYear) {
-    const globalInHand = transactions.length > 0 ? parseFloat(transactions[transactions.length - 1].balanceAfter) : 0;
+    // Note: Dashboard summary still reflects only the LOADED transactions.
+    // In a real production app, we would fetch global summaries from a separate endpoint.
+    const globalInHand = transactions.length > 0 ? parseFloat(transactions[0].balanceAfter) : 0;
     balanceEl.innerText = currencyFormatter.format(globalInHand);
     creditEl.innerText = currencyFormatter.format(transactions.filter(t => t.entryType === 'Credit').reduce((s, t) => s + parseFloat(t.amount), 0));
     debitEl.innerText = currencyFormatter.format(transactions.filter(t => t.entryType === 'Debit').reduce((s, t) => s + parseFloat(t.amount), 0));
@@ -333,7 +367,7 @@ function updateDashboard(filtered, selMonth, selYear) {
     monthBalanceEl.style.color = periodBal >= 0 ? 'var(--primary)' : 'var(--danger)';
 
     const monthName = selMonth ? filterMonth.options[filterMonth.selectedIndex].text : '';
-    currentViewLabel.innerText = (selMonth || selYear) ? `Viewing: ${monthName} ${selYear}`.trim() : 'Viewing: All-time Transactions';
+    currentViewLabel.innerText = (selMonth || selYear) ? `Viewing: ${monthName} ${selYear}`.trim() : 'Viewing: Recent Transactions';
 }
 
 function toggleRow(element) {
@@ -360,6 +394,8 @@ function toggleRow(element) {
     }
 }
 
+// --- CRUD ---
+
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -383,6 +419,7 @@ form.addEventListener('submit', async (e) => {
         if (response.ok) {
             showToast(editingId ? 'Entry updated' : 'Entry added');
             resetForm();
+            currentPage = 1;
             loadTransactions();
             updateBackupStatus();
         }
@@ -396,6 +433,7 @@ async function deleteTransaction(id) {
         const response = await fetch(`${API_BASE_URL}/${id}`, { method: 'DELETE' });
         if (response.ok) {
             showToast('Deleted');
+            currentPage = 1;
             loadTransactions();
             updateBackupStatus();
         }

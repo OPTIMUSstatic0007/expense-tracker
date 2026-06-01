@@ -24,7 +24,20 @@ fun Route.transactionRoutes() {
 
     route("/transactions") {
         get {
-            call.respond(service.getAllTransactions())
+            val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+            val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 30
+            
+            val transactions = service.getPagedTransactions(page, limit)
+            val total = service.getTotalCount()
+            val hasMore = (page * limit) < total
+            
+            call.respond(com.household.ledger.models.PagedTransactionsResponse(
+                transactions = transactions,
+                page = page,
+                limit = limit,
+                total = total,
+                hasMore = hasMore
+            ))
         }
 
         post {
