@@ -1,7 +1,6 @@
 const API_BASE_URL = '/transactions';
 const EXPORT_BASE_URL = '/export';
 const BACKUP_BASE_URL = '/backup';
-const RESTORE_BASE_URL = '/restore/database';
 
 // State Management
 let transactions = [];
@@ -17,13 +16,11 @@ const toastContainer = document.getElementById('toast-container');
 
 // Management Elements
 const backupBtn = document.getElementById('backup-db-btn');
-const snapshotBtn = document.getElementById('snapshot-db-btn');
 const restoreBtn = document.getElementById('restore-db-btn');
 const restoreInput = document.getElementById('restore-input');
 const backupStatusEl = document.getElementById('backup-status');
 const lastBackupTimeEl = document.getElementById('last-backup-time');
-const pendingCountEl = document.getElementById('pending-count');
-const manualCountEl = document.getElementById('manual-count');
+const backupCountEl = document.getElementById('backup-count');
 
 // Summary Elements
 const balanceEl = document.getElementById('balance');
@@ -48,9 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateInput = document.getElementById('date');
     if (dateInput) dateInput.valueAsDate = new Date();
 
-    const currentYear = new Date().getFullYear().toString();
-    if (filterYear) filterYear.value = currentYear;
-
     loadTransactions();
     updateBackupStatus();
     setupEventListeners();
@@ -61,16 +55,23 @@ function setupEventListeners() {
         if (el) el.addEventListener('input', () => applyFilters());
     });
 
+    window.addEventListener('resize', () => {
+        const isMobileNow = window.innerWidth <= 768;
+        if (window.lastWasMobile !== isMobileNow) {
+            window.lastWasMobile = isMobileNow;
+            applyFilters();
+        }
+    });
+
     if (exportExcelBtn) exportExcelBtn.addEventListener('click', () => triggerExport('excel', exportExcelBtn));
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => triggerExport('csv', exportCsvBtn));
 
     // Backup & Restore
     if (backupBtn) backupBtn.addEventListener('click', () => {
-        showToast('Preparing database download...', 'info');
+        showToast('Preparing database backup...', 'info');
         window.location.href = `${BACKUP_BASE_URL}/database`;
+        setTimeout(updateBackupStatus, 2000);
     });
-
-    if (snapshotBtn) snapshotBtn.addEventListener('click', createRestorePoint);
 
     if (restoreBtn) restoreBtn.addEventListener('click', () => restoreInput.click());
 
@@ -87,6 +88,14 @@ function setupEventListeners() {
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
     style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2
 });
+
+function formatMobileDate(dateStr) {
+    try {
+        if (!dateStr) return '-';
+        // The image shows YYYY-MM-DD format for mobile too
+        return dateStr;
+    } catch (e) { return dateStr; }
+}
 
 // --- UI Feedback ---
 
@@ -122,9 +131,18 @@ async function loadTransactions() {
         const response = await fetch(API_BASE_URL);
         if (!response.ok) throw new Error('Fetch failed');
         transactions = await response.json();
+
+        // Auto-select current year only if it has records
+        const currentYear = new Date().getFullYear().toString();
+        const hasCurrentYearRecords = transactions.some(t => t.date.startsWith(currentYear));
+        if (hasCurrentYearRecords && filterYear) {
+            filterYear.value = currentYear;
+        }
+
         applyFilters();
     } catch (error) {
         showToast('Connection failed: Server unreachable', 'error');
+        console.error(error);
     }
 }
 
@@ -132,31 +150,13 @@ async function updateBackupStatus() {
     try {
         const response = await fetch(`${BACKUP_BASE_URL}/status`);
         if (response.ok) {
-            const s = await response.json();
-            if (backupStatusEl) backupStatusEl.innerText = s.status;
-            if (lastBackupTimeEl) lastBackupTimeEl.innerText = s.lastBackupTime;
-            if (pendingCountEl) pendingCountEl.innerText = s.transactionsSinceLast;
-            if (manualCountEl) manualCountEl.innerText = s.manualCount;
+            const status = await response.json();
+            if (backupStatusEl) backupStatusEl.innerText = status.status;
+            if (lastBackupTimeEl) lastBackupTimeEl.innerText = status.lastBackupTime;
+            if (backupCountEl) backupCountEl.innerText = status.backupCount;
         }
     } catch (e) {
         console.error("Status check failed", e);
-    }
-}
-
-async function createRestorePoint() {
-    setLoading(snapshotBtn, true, 'Create Restore Point');
-    try {
-        const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
-        if (response.ok) {
-            showToast('Restore point created successfully');
-            updateBackupStatus();
-        } else {
-            showToast('Failed to create restore point', 'error');
-        }
-    } catch (e) {
-        showToast('Network error while creating snapshot', 'error');
-    } finally {
-        setLoading(snapshotBtn, false, 'Create Restore Point');
     }
 }
 
@@ -171,7 +171,7 @@ async function handleRestore(file) {
     formData.append('file', file);
 
     try {
-        const response = await fetch(RESTORE_BASE_URL, {
+        const response = await fetch('/restore/database', {
             method: 'POST',
             body: formData
         });
@@ -201,12 +201,19 @@ function applyFilters() {
 
     const filtered = transactions.filter(t => {
         const matchesSearch =
-            t.category.toLowerCase().includes(searchTerm) ||
+            (t.category && t.category.toLowerCase().includes(searchTerm)) ||
             (t.paidTo && t.paidTo.toLowerCase().includes(searchTerm)) ||
             (t.notes && t.notes.toLowerCase().includes(searchTerm));
 
-        const [tYear, tMonth] = t.date.split('-');
-        return matchesSearch && (month === "" || tMonth === month) && (year === "" || tYear === year) && (category === "" || t.category === category) && (type === "" || t.entryType === type);
+        const dateParts = (t.date || "").split('-');
+        const tYear = dateParts[0] || "";
+        const tMonth = dateParts[1] || "";
+
+        return matchesSearch &&
+               (month === "" || tMonth === month) &&
+               (year === "" || tYear === year) &&
+               (category === "" || t.category === category) &&
+               (type === "" || t.entryType === type);
     });
 
     renderTable(filtered);
@@ -218,33 +225,89 @@ function renderTable(data) {
     recordCountEl.innerText = `${data.length} Records`;
     if (data.length === 0) {
         emptyStateEl.classList.remove('hidden');
-    } else {
-        emptyStateEl.classList.add('hidden');
-        data.forEach(t => {
-            const isCredit = t.entryType === 'Credit';
-            const row = document.createElement('tr');
+        return;
+    }
+
+    emptyStateEl.classList.add('hidden');
+    const isMobile = window.innerWidth <= 768;
+    window.lastWasMobile = isMobile;
+
+    data.forEach(t => {
+        const isCredit = t.entryType === 'Credit';
+        const row = document.createElement('tr');
+
+        if (isMobile) {
+            // Updated Structure to match user image exactly
             row.innerHTML = `
-                <td>${t.date}</td>
-                <td>
-                    <div class="category-cell">${escapeHtml(t.category)}</div>
-                    <div class="paid-to-text">${escapeHtml(t.paidTo || '-')}</div>
+                <div class="row-compact" onclick="toggleRow(this)">
+                    <div class="mobile-date-col">${t.date}</div>
+                    <div class="mobile-indicator">
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </div>
+                    <div class="mobile-category-col">${escapeHtml(t.category)}</div>
+                    <div class="mobile-amount-col ${isCredit ? 'credit-text' : 'debit-text'}">
+                        ${isCredit ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </div>
+                </div>
+                <div class="row-details">
+                    <div class="details-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">PAID TO / FROM</span>
+                            <span class="detail-value">${escapeHtml(t.paidTo || '-')}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">EXPENSE TYPE</span>
+                            <span class="detail-value">${escapeHtml(t.expenseType || '-')}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">BALANCE AFTER</span>
+                            <span class="detail-value">₹${parseFloat(t.balanceAfter).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">ENTRY TYPE</span>
+                            <span class="detail-value">${t.entryType}</span>
+                        </div>
+                        <div class="detail-item detail-full-width">
+                            <span class="detail-label">NOTES / REFERENCE</span>
+                            <span class="detail-value">${escapeHtml(t.notes || 'No reference notes')}</span>
+                        </div>
+                    </div>
+                    <div class="details-actions">
+                        <button class="btn-action-mobile" onclick="event.stopPropagation(); editTransaction(${t.id})">Edit Entry</button>
+                        <button class="btn-action-mobile" onclick="event.stopPropagation(); deleteTransaction(${t.id})">Delete</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Standard Table DOM for Desktop
+            row.innerHTML = `
+                <td data-label="Date">
+                    <span class="desktop-date">${t.date}</span>
                 </td>
-                <td>${escapeHtml(t.expenseType)}</td>
-                <td class="notes-cell" title="${escapeHtml(t.notes)}">${escapeHtml(t.notes || '—')}</td>
-                <td><span class="status-pill ${isCredit ? 'status-added' : 'status-expense'}">${isCredit ? 'ADDED' : 'EXPENSE'}</span></td>
-                <td class="text-right" style="font-weight: 500;">${!isCredit ? parseFloat(t.amount).toFixed(2) : '—'}</td>
-                <td class="text-right" style="font-weight: 500;">${isCredit ? parseFloat(t.amount).toFixed(2) : '—'}</td>
-                <td class="text-right" style="font-weight: 600;">${parseFloat(t.balanceAfter).toFixed(2)}</td>
-                <td class="text-center">
-                    <div style="display: flex; gap: 4px; justify-content: center;">
+                <td data-label="Transaction">
+                    <div class="transaction-info">
+                        <div class="category-cell">${escapeHtml(t.category)}</div>
+                        <div class="paid-to-text">${escapeHtml(t.paidTo || '-')}</div>
+                    </div>
+                </td>
+                <td data-label="Method">${escapeHtml(t.expenseType)}</td>
+                <td data-label="Notes" class="notes-cell" title="${escapeHtml(t.notes)}">${escapeHtml(t.notes || '—')}</td>
+                <td data-label="Type"><span class="status-pill ${isCredit ? 'status-added' : 'status-expense'}">${isCredit ? 'ADDED' : 'EXPENSE'}</span></td>
+                <td data-label="Expense" class="text-right" style="font-weight: 500;">${!isCredit ? parseFloat(t.amount).toFixed(2) : '—'}</td>
+                <td data-label="Added" class="text-right" style="font-weight: 500;">${isCredit ? parseFloat(t.amount).toFixed(2) : '—'}</td>
+                <td data-label="Balance" class="text-right" style="font-weight: 600;">${parseFloat(t.balanceAfter).toFixed(2)}</td>
+                <td data-label="Actions" class="text-center">
+                    <div class="action-buttons">
                         <button class="btn-action btn-edit" onclick="editTransaction(${t.id})">Edit</button>
                         <button class="btn-action btn-delete" onclick="deleteTransaction(${t.id})">Del</button>
                     </div>
                 </td>
             `;
-            historyBody.appendChild(row);
-        });
-    }
+        }
+        historyBody.appendChild(row);
+    });
 }
 
 function updateDashboard(filtered, selMonth, selYear) {
@@ -259,6 +322,30 @@ function updateDashboard(filtered, selMonth, selYear) {
 
     const monthName = selMonth ? filterMonth.options[filterMonth.selectedIndex].text : '';
     currentViewLabel.innerText = (selMonth || selYear) ? `Viewing: ${monthName} ${selYear}`.trim() : 'Viewing: All-time Transactions';
+}
+
+function toggleRow(element) {
+    const row = element.parentElement;
+    const isExpanded = row.classList.contains('tr-expanded');
+
+    // Collapse all other rows
+    document.querySelectorAll('.ledger-table tr').forEach(r => {
+        if (r !== row) r.classList.remove('tr-expanded');
+    });
+
+    // Toggle current row
+    if (isExpanded) {
+        row.classList.remove('tr-expanded');
+    } else {
+        row.classList.add('tr-expanded');
+        // Smooth scroll if row is near bottom
+        setTimeout(() => {
+            const rect = row.getBoundingClientRect();
+            if (rect.bottom > window.innerHeight) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }, 300);
+    }
 }
 
 // --- CRUD ---
@@ -302,7 +389,7 @@ async function deleteTransaction(id) {
             loadTransactions();
             updateBackupStatus();
         }
-    } catch (error) { showToast('Delete failed', 'error'); }
+    } catch (e) { showToast('Delete failed', 'error'); }
 }
 
 function editTransaction(id) {

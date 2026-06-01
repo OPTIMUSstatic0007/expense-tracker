@@ -47,7 +47,9 @@ class BackupService {
      * Requirement: Store backups in backend/backend/data/backups/
      */
     private val baseBackupDir: File by lazy {
-        val dir = File(dbFile.parentFile, "backups")
+        val userDir = System.getProperty("user.dir")
+        // Absolute fallback to backend/backend/data/backups as requested by user
+        val dir = File(userDir, "backend/backend/data/backups")
         if (!dir.exists()) {
             val created = dir.mkdirs()
             logger.info("Created backup directory: ${dir.absolutePath} (Success: $created)")

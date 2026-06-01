@@ -234,24 +234,19 @@
         <section class="mgmt-section">
             <div class="mgmt-header">
                 <h2>Database Administration</h2>
-                <p>Securely backup your financial data or create restore points for long-term safety.</p>
+                <p>Securely backup your financial data or restore from a previous session.</p>
                 <div class="backup-status-container">
-                    <span class="status-indicator">● Status: <span id="backup-status">Optimized</span></span>
-                    <span class="status-indicator">● Last Sync: <span id="last-backup-time">Never</span></span>
-                    <span class="status-indicator">● Pending: <span id="pending-count">0</span>/10</span>
-                    <span class="status-indicator">● Manual Pts: <span id="manual-count">0</span></span>
+                    <span class="status-indicator">● Auto-Backup: <span id="backup-status">Active</span></span>
+                    <span class="status-indicator">● Last Backup: <span id="last-backup-time">Never</span></span>
+                    <span class="status-indicator">● Total Backups: <span id="backup-count">0</span></span>
                 </div>
             </div>
             <div class="mgmt-actions">
-                <button id="snapshot-db-btn" class="btn-outline" title="Create a permanent manual restore point">
-                    <span class="btn-text">Create Restore Point</span>
+                <button id="backup-db-btn" class="btn-outline">
+                    <span class="btn-text">Download Backup (.db)</span>
                     <span class="btn-loader hidden"></span>
                 </button>
-                <button id="backup-db-btn" class="btn-outline" title="Download the current live database file">
-                    <span class="btn-text">Download Current (.db)</span>
-                    <span class="btn-loader hidden"></span>
-                </button>
-                <button id="restore-db-btn" class="btn-outline" title="Restore from a previously saved .db file">
+                <button id="restore-db-btn" class="btn-outline">
                     <span class="btn-text">Restore from File</span>
                     <span class="btn-loader hidden"></span>
                 </button>
@@ -259,6 +254,13 @@
             </div>
         </section>
     </main>
+
+    <footer class="product-footer">
+        <div class="footer-brand">ExpenseTracker <span class="version">v1.0</span></div>
+        <div class="footer-tagline">Private • Offline-First • Secure</div>
+        <div class="footer-credit">Developed by Aditya Khandagale</div>
+    </footer>
+
     <script src="app.js"></script>
 </body>
 </html>

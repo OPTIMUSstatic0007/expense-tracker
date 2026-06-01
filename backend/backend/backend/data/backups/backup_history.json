@@ -1,0 +1,23 @@
+[
+    {
+        "filename": "ledger_backup_2026_06_01_18_34_30.db",
+        "type": "auto",
+        "timestamp": "2026-06-01T18:34:30.364876400",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_01_18_39_40.db",
+        "type": "auto",
+        "timestamp": "2026-06-01T18:39:40.199015200",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_01_18_47_14.db",
+        "type": "auto",
+        "timestamp": "2026-06-01T18:47:14.183531100",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    }
+]
