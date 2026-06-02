@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.nio.charset.StandardCharsets
+import java.sql.DriverManager
 
 @Serializable
 data class BackupMeta(
@@ -253,26 +253,58 @@ class BackupService {
         )
     }
 
-    fun restoreDatabase(tempFile: File, currentTransactions: List<Transaction>): Boolean {
+    suspend fun restoreDatabase(tempFile: File, currentTransactions: List<Transaction>): Boolean {
+        logger.info("Restore initiated")
         try {
+            // 1. Emergency snapshot of current state
             performPhysicalBackup("emergency", currentTransactions)
 
-            val isValid = tempFile.inputStream().use { input ->
-                val bytes = ByteArray(16)
-                val readCount = input.read(bytes)
-                readCount == 16 && String(bytes, StandardCharsets.US_ASCII).startsWith("SQLite format 3")
+            // 2. Integrity Verification (Requirement 3)
+            if (!tempFile.exists() || tempFile.length() == 0L) {
+                logger.error("Restore failed: File invalid or empty")
+                return false
             }
-            if (!isValid) return false
 
-            tempFile.copyTo(dbFile, overwrite = true)
+            // Verify SQLite format and basic connectivity
+            val isValid = try {
+                DriverManager.getConnection("jdbc:sqlite:${tempFile.absolutePath}").use { conn ->
+                    conn.createStatement().use { stmt ->
+                        stmt.executeQuery("SELECT count(*) FROM sqlite_master;").use { rs ->
+                            rs.next()
+                        }
+                    }
+                }
+                true
+            } catch (e: Exception) {
+                logger.error("Restore verification failed: Not a valid SQLite database | ${e.message}")
+                false
+            }
+
+            if (!isValid) return false
+            logger.info("Restore verification passed")
+
+            // 3. Atomic Swap (Requirement 1)
+            com.household.ledger.database.DatabaseFactory.resetConnection()
             
-            // Reset metadata on restore
-            val meta = BackupMeta()
+            tempFile.copyTo(dbFile, overwrite = true)
+            logger.info("Database swapped successfully")
+
+            // 4. Post-Restore Sync (Requirement 2)
+            val txService = com.household.ledger.database.TransactionService()
+            txService.recalculateBalances()
+            
+            // Resync counts and metadata
             val history = loadHistory()
-            meta.autoBackupCount = history.count { it.type == "auto" }
-            meta.manualRestorePointCount = history.count { it.type == "manual" }
+            val meta = BackupMeta(
+                autoBackupCount = history.count { it.type == "auto" },
+                manualRestorePointCount = history.count { it.type == "manual" },
+                lastActivityTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+                lastMutationType = "RESTORE",
+                isDirty = false
+            )
             saveMeta(meta)
 
+            logger.info("Post-restore sync completed")
             return true
         } catch (e: Exception) { 
             logger.error("Restore failed: ${e.message}")

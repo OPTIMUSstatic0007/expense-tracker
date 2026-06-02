@@ -58,6 +58,7 @@ fun Route.transactionRoutes() {
                         println("Metadata sync failed: ${e.message}")
                     }
                 }
+                println("Mutation response returned: 201 Created")
                 call.respond(HttpStatusCode.Created, created)
             } else {
                 call.respond(HttpStatusCode.InternalServerError, "Failed to create transaction")
@@ -76,6 +77,7 @@ fun Route.transactionRoutes() {
                         println("Metadata sync failed: ${e.message}")
                     }
                 }
+                println("Mutation response returned: 200 OK")
                 call.respond(HttpStatusCode.OK, "Transaction updated")
             } else {
                 call.respond(HttpStatusCode.NotFound, "Transaction not found")
@@ -93,6 +95,7 @@ fun Route.transactionRoutes() {
                         println("Metadata sync failed: ${e.message}")
                     }
                 }
+                println("Mutation response returned: 200 OK")
                 call.respond(HttpStatusCode.OK, "Transaction deleted")
             } else {
                 call.respond(HttpStatusCode.NotFound, "Transaction not found")

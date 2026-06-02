@@ -7,20 +7,6 @@
         "balanceAtBackup": "9820.17"
     },
     {
-        "filename": "ledger_backup_2026_06_01_18_25_07.db",
-        "type": "auto",
-        "timestamp": "2026-06-01T18:25:07.446991100",
-        "transactionCount": 0,
-        "balanceAtBackup": "0.00"
-    },
-    {
-        "filename": "ledger_backup_2026_06_02_00_25_17.db",
-        "type": "auto",
-        "timestamp": "2026-06-02T00:25:17.764608",
-        "transactionCount": 0,
-        "balanceAtBackup": "0.00"
-    },
-    {
         "filename": "manual_restore_point_2026_06_02_00_25_45.db",
         "type": "manual",
         "timestamp": "2026-06-02T00:25:45.999922400",
@@ -87,6 +73,48 @@
         "filename": "ledger_backup_2026_06_02_02_08_50.db",
         "type": "auto",
         "timestamp": "2026-06-02T02:08:50.798744700",
+        "transactionCount": 55,
+        "balanceAtBackup": "4999.98"
+    },
+    {
+        "filename": "ledger_backup_2026_06_02_12_17_06.db",
+        "type": "auto",
+        "timestamp": "2026-06-02T12:17:06.518814400",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "manual_restore_point_2026_06_02_12_20_55.db",
+        "type": "manual",
+        "timestamp": "2026-06-02T12:20:55.470914400",
+        "transactionCount": 55,
+        "balanceAtBackup": "4999.98"
+    },
+    {
+        "filename": "ledger_backup_2026_06_02_12_36_10.db",
+        "type": "auto",
+        "timestamp": "2026-06-02T12:36:10.555733800",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "manual_restore_point_2026_06_02_12_49_47.db",
+        "type": "manual",
+        "timestamp": "2026-06-02T12:49:47.224414300",
+        "transactionCount": 56,
+        "balanceAtBackup": "4999.98"
+    },
+    {
+        "filename": "emergency_pre_restore_2026_06_02_12_50_14.db",
+        "type": "emergency",
+        "timestamp": "2026-06-02T12:50:14.653400200",
+        "transactionCount": 56,
+        "balanceAtBackup": "4999.98"
+    },
+    {
+        "filename": "manual_restore_point_2026_06_02_12_52_21.db",
+        "type": "manual",
+        "timestamp": "2026-06-02T12:52:21.572252800",
         "transactionCount": 55,
         "balanceAtBackup": "4999.98"
     }

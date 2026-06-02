@@ -475,8 +475,15 @@ form.addEventListener('submit', async (e) => {
             currentPage = 1;
             loadTransactions();
             updateBackupStatus();
+        } else {
+            const err = await response.text();
+            console.error('Mutation request failed:', response.status, err);
+            showToast('Save failed: ' + (err || 'Server error'), 'error');
         }
-    } catch (e) { showToast('Error saving data', 'error'); }
+    } catch (e) {
+        console.error('Network or mutation error:', e);
+        showToast('Error saving data', 'error');
+    }
     finally { setLoading(saveBtn, false, editingId ? 'Update Ledger Entry' : 'Save to Ledger'); }
 });
 
@@ -489,8 +496,15 @@ async function deleteTransaction(id) {
             currentPage = 1;
             loadTransactions();
             updateBackupStatus();
+        } else {
+            const err = await response.text();
+            console.error('Delete request failed:', response.status, err);
+            showToast('Delete failed: ' + (err || 'Server error'), 'error');
         }
-    } catch (e) { showToast('Delete failed', 'error'); }
+    } catch (e) {
+        console.error('Network or delete error:', e);
+        showToast('Delete failed', 'error');
+    }
 }
 
 function editTransaction(id) {

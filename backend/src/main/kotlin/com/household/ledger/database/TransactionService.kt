@@ -69,6 +69,7 @@ class TransactionService {
     }
 
     suspend fun addTransaction(transaction: Transaction): Transaction? = dbQuery {
+        logger.info("Transaction mutation received: ADD")
         val amountNormalized = normalize(transaction.amount)
         val insertStatement = Transactions.insert {
             it[date] = transaction.date
@@ -83,7 +84,7 @@ class TransactionService {
         
         val newId = insertStatement[Transactions.id]
         
-        recalculateBalances()
+        performRecalculation()
         
         Transactions.select { Transactions.id eq newId }
             .map { rowToTransaction(it) }
@@ -91,6 +92,7 @@ class TransactionService {
     }
 
     suspend fun updateTransaction(id: Int, transaction: Transaction): Boolean = dbQuery {
+        logger.info("Transaction mutation received: UPDATE | ID: $id")
         val amountNormalized = normalize(transaction.amount)
         val updated = Transactions.update({ Transactions.id eq id }) {
             it[date] = transaction.date
@@ -103,20 +105,27 @@ class TransactionService {
         } > 0
         
         if (updated) {
-            recalculateBalances()
+            performRecalculation()
         }
         updated
     }
 
     suspend fun deleteTransaction(id: Int): Boolean = dbQuery {
+        logger.info("Transaction mutation received: DELETE | ID: $id")
         val deleted = Transactions.deleteWhere { Transactions.id eq id } > 0
         if (deleted) {
-            recalculateBalances()
+            performRecalculation()
         }
         deleted
     }
 
-    private fun recalculateBalances() {
+    suspend fun recalculateBalances() {
+        dbQuery {
+            performRecalculation()
+        }
+    }
+
+    private fun performRecalculation() {
         val all = Transactions.selectAll()
             .orderBy(Transactions.date to SortOrder.ASC, Transactions.id to SortOrder.ASC)
             .toList()
@@ -136,6 +145,7 @@ class TransactionService {
                 it[balanceAfter] = normalize(currentBalance)
             }
         }
+        logger.info("SQLite write successful: Ledger balances updated")
     }
 
     private fun rowToTransaction(row: ResultRow) = Transaction(

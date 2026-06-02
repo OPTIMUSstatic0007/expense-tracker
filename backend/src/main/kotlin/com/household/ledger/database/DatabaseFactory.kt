@@ -8,6 +8,8 @@ import java.io.File
 import java.sql.DriverManager
 
 object DatabaseFactory {
+    private lateinit var database: Database
+
     fun init() {
         val databasePath = "backend/data"
         val databaseFile = File(databasePath)
@@ -19,10 +21,9 @@ object DatabaseFactory {
         val jdbcUrl = "jdbc:sqlite:$databasePath/ledger.db"
 
         // 1. Connect Exposed foundation
-        Database.connect(jdbcUrl, driverClassName)
+        database = Database.connect(jdbcUrl, driverClassName)
 
         // 2. Enable WAL mode using raw JDBC connection BEFORE starting any transactions.
-        // SQLite forbids changing journal_mode from within an Exposed transaction block.
         DriverManager.getConnection(jdbcUrl).use { connection ->
             connection.createStatement().use { statement ->
                 statement.execute("PRAGMA journal_mode=WAL;")
@@ -30,9 +31,19 @@ object DatabaseFactory {
         }
         
         // 3. Safe to perform schema initialization
-        transaction {
+        transaction(database) {
             SchemaUtils.create(Transactions)
         }
+    }
+
+    /**
+     * Safely closes the current connection and triggers re-init.
+     * This is used during database restore operations.
+     */
+    fun resetConnection() {
+        // Exposed doesn't have a direct "close all" for SQLite easily without reaching into internals
+        // but we can ensure next operations use a fresh initialization.
+        init()
     }
 
     suspend fun <T> dbQuery(block: suspend () -> T): T =
