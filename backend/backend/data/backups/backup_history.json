@@ -21,13 +21,6 @@
         "balanceAtBackup": "4999.98"
     },
     {
-        "filename": "ledger_backup_2026_06_02_02_07_51.db",
-        "type": "auto",
-        "timestamp": "2026-06-02T02:07:51.542449800",
-        "transactionCount": 53,
-        "balanceAtBackup": "4999.98"
-    },
-    {
         "filename": "ledger_backup_2026_06_02_02_08_50.db",
         "type": "auto",
         "timestamp": "2026-06-02T02:08:50.798744700",
@@ -131,5 +124,19 @@
         "timestamp": "2026-06-02T15:02:51.775627100",
         "transactionCount": 0,
         "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_03_00_35_01.db",
+        "type": "auto",
+        "timestamp": "2026-06-03T00:35:01.423712400",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "manual_restore_point_2026_06_03_00_35_21.db",
+        "type": "manual",
+        "timestamp": "2026-06-03T00:35:21.200476800",
+        "transactionCount": 55,
+        "balanceAtBackup": "4999.98"
     }
 ]
