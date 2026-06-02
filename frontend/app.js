@@ -19,6 +19,14 @@ const toastContainer = document.getElementById('toast-container');
 const loadMoreBtn = document.getElementById('load-more-btn');
 const loadMoreContainer = document.getElementById('load-more-container');
 
+// Modal Elements - Direct Viewport Overlays
+const modalWrapper = document.getElementById('transaction-modal');
+const modalBackdrop = document.getElementById('modal-backdrop');
+const modalClose = document.getElementById('modal-close');
+const modalTitle = document.getElementById('modal-title');
+const fabAdd = document.getElementById('fab-add');
+const saveBtnText = document.getElementById('save-btn-text');
+
 // Management Elements
 const backupBtn = document.getElementById('backup-db-btn');
 const restoreBtn = document.getElementById('restore-db-btn');
@@ -58,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
+    // Filter Listeners
     [searchInput, filterMonth, filterYear, filterCategory, filterType].forEach(el => {
         if (el) el.addEventListener('input', () => {
             currentPage = 1; // Reset to page 1 on filter
@@ -65,6 +74,7 @@ function setupEventListeners() {
         });
     });
 
+    // Resize Handler for Mobile View
     window.addEventListener('resize', () => {
         const isMobileNow = window.innerWidth <= 768;
         if (window.lastWasMobile !== isMobileNow) {
@@ -73,6 +83,7 @@ function setupEventListeners() {
         }
     });
 
+    // Export Handlers
     if (exportExcelBtn) exportExcelBtn.addEventListener('click', () => triggerExport('excel', exportExcelBtn));
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => triggerExport('csv', exportCsvBtn));
 
@@ -116,11 +127,26 @@ function setupEventListeners() {
         if (e.target.files.length > 0) handleRestore(e.target.files[0]);
     });
 
-    // Real-time validation
-    form.querySelectorAll('input, select').forEach(input => {
-        input.addEventListener('blur', () => validateField(input));
+    // Modal Events - Critical Binding
+    if (fabAdd) fabAdd.addEventListener('click', () => openModal('create'));
+    if (modalClose) modalClose.addEventListener('click', () => closeModal());
+    if (modalBackdrop) modalBackdrop.addEventListener('click', () => closeModal());
+
+    // Desktop Close on ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalWrapper && !modalWrapper.classList.contains('hidden')) {
+            closeModal();
+        }
     });
 
+    // Real-time validation
+    if (form) {
+        form.querySelectorAll('input, select').forEach(input => {
+            input.addEventListener('blur', () => validateField(input));
+        });
+    }
+
+    // Pagination Handler
     if (loadMoreBtn) {
         loadMoreBtn.addEventListener('click', () => {
             if (!isLoadingMore && hasMore) {
@@ -129,6 +155,58 @@ function setupEventListeners() {
             }
         });
     }
+}
+
+/**
+ * Structural Fix: Modal Control logic
+ */
+function openModal(mode, data = null) {
+    console.log("Opening Modal | Mode:", mode);
+    if (!modalWrapper || !modalBackdrop) {
+        console.error("Modal elements missing from DOM!");
+        return;
+    }
+
+    if (mode === 'edit' && data) {
+        modalTitle.innerText = 'Edit Entry';
+        if (saveBtnText) saveBtnText.innerText = 'Update Ledger Entry';
+
+        document.getElementById('date').value = data.date;
+        document.getElementById('type').value = data.entryType;
+        document.getElementById('amount').value = data.amount;
+        document.getElementById('category').value = data.category;
+        document.getElementById('source').value = data.expenseType;
+        document.getElementById('person').value = data.paidTo;
+        document.getElementById('notes').value = data.notes;
+        editingId = data.id;
+    } else {
+        modalTitle.innerText = 'Record New Entry';
+        if (saveBtnText) saveBtnText.innerText = 'Save to Ledger';
+        resetForm();
+    }
+
+    // Atomic visibility toggle
+    modalBackdrop.classList.remove('hidden');
+    modalWrapper.classList.remove('hidden');
+
+    console.log("Modal Wrapper Class:", modalWrapper.className);
+    console.log("Modal Card visible?", !!document.querySelector('.modal-card')?.offsetParent);
+    console.log("Form attached?", !!document.getElementById('exp-form'));
+
+    // Background Lock
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+    if (!modalWrapper || !modalBackdrop) return;
+
+    modalWrapper.classList.add('hidden');
+    modalBackdrop.classList.add('hidden');
+
+    // Background Unlock
+    document.body.style.overflow = '';
+
+    resetForm();
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -161,10 +239,10 @@ function setLoading(btn, isLoading, originalText) {
     const textSpan = btn.querySelector('.btn-text');
     btn.disabled = isLoading;
     if (isLoading) {
-        loader?.classList.remove('hidden');
+        if (loader) loader.classList.remove('hidden');
         if (textSpan) textSpan.innerText = 'Working...';
     } else {
-        loader?.classList.add('hidden');
+        if (loader) loader.classList.add('hidden');
         if (textSpan) textSpan.innerText = originalText;
     }
 }
@@ -181,7 +259,6 @@ async function loadTransactions(append = false) {
     }
 
     try {
-        // Fetch paginated results
         const response = await fetch(`${API_BASE_URL}?page=${currentPage}&limit=30`);
         if (!response.ok) throw new Error('Fetch failed');
         const data = await response.json();
@@ -198,7 +275,6 @@ async function loadTransactions(append = false) {
             loadMoreContainer.classList.toggle('hidden', !hasMore);
         }
 
-        // Only auto-select year on first load of first page
         if (!append && currentPage === 1) {
             const currentYear = new Date().getFullYear().toString();
             const hasCurrentYearRecords = transactions.some(t => t.date.startsWith(currentYear));
@@ -208,8 +284,6 @@ async function loadTransactions(append = false) {
         }
 
         applyFilters();
-
-        // Requirement 3 & 5: Force update dashboard with canonical backend totals
         updateDashboard(null, null, null, data);
     } catch (error) {
         showToast('Connection failed: Server unreachable', 'error');
@@ -406,14 +480,12 @@ function renderTable(data) {
 
 function updateDashboard(filtered, selMonth, selYear, pagedData = null) {
     if (pagedData) {
-        // Requirement 3, 5 & 6: Use true backend-calculated global totals
         balanceEl.innerText = currencyFormatter.format(pagedData.globalBalance);
         creditEl.innerText = currencyFormatter.format(pagedData.totalCredit);
         debitEl.innerText = currencyFormatter.format(pagedData.totalDebit);
     }
 
     if (filtered) {
-        // Requirement 7: Monthly Balance = monthly credits - monthly debits (from current filtered view)
         const periodBal = filtered.reduce((s, t) => s + (t.entryType === 'Credit' ? parseFloat(t.amount) : -parseFloat(t.amount)), 0);
         monthBalanceEl.innerText = (periodBal >= 0 ? '+' : '') + currencyFormatter.format(periodBal);
         monthBalanceEl.style.color = periodBal >= 0 ? 'var(--primary)' : 'var(--danger)';
@@ -427,17 +499,14 @@ function toggleRow(element) {
     const row = element.parentElement;
     const isExpanded = row.classList.contains('tr-expanded');
 
-    // Collapse all other rows
     document.querySelectorAll('.ledger-table tr').forEach(r => {
         if (r !== row) r.classList.remove('tr-expanded');
     });
 
-    // Toggle current row
     if (isExpanded) {
         row.classList.remove('tr-expanded');
     } else {
         row.classList.add('tr-expanded');
-        // Smooth scroll if row is near bottom
         setTimeout(() => {
             const rect = row.getBoundingClientRect();
             if (rect.bottom > window.innerHeight) {
@@ -449,43 +518,43 @@ function toggleRow(element) {
 
 // --- CRUD ---
 
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-    const originalText = editingId ? 'Update Ledger Entry' : 'Save to Ledger';
-    setLoading(saveBtn, true, originalText);
-    const data = {
-        date: document.getElementById('date').value,
-        entryType: document.getElementById('type').value,
-        amount: document.getElementById('amount').value,
-        category: document.getElementById('category').value,
-        expenseType: document.getElementById('source').value,
-        paidTo: document.getElementById('person').value,
-        notes: document.getElementById('notes').value
-    };
-    try {
-        const response = await fetch(editingId ? `${API_BASE_URL}/${editingId}` : API_BASE_URL, {
-            method: editingId ? 'PUT' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (response.ok) {
-            showToast(editingId ? 'Entry updated' : 'Entry added');
-            resetForm();
-            currentPage = 1;
-            loadTransactions();
-            updateBackupStatus();
-        } else {
-            const err = await response.text();
-            console.error('Mutation request failed:', response.status, err);
-            showToast('Save failed: ' + (err || 'Server error'), 'error');
+if (form) {
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!validateForm()) return;
+        const originalText = editingId ? 'Update Ledger Entry' : 'Save to Ledger';
+        setLoading(saveBtn, true, originalText);
+        const data = {
+            date: document.getElementById('date').value,
+            entryType: document.getElementById('type').value,
+            amount: document.getElementById('amount').value,
+            category: document.getElementById('category').value,
+            expenseType: document.getElementById('source').value,
+            paidTo: document.getElementById('person').value,
+            notes: document.getElementById('notes').value
+        };
+        try {
+            const response = await fetch(editingId ? `${API_BASE_URL}/${editingId}` : API_BASE_URL, {
+                method: editingId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (response.ok) {
+                showToast(editingId ? 'Entry updated' : 'Entry added');
+                closeModal();
+                currentPage = 1;
+                loadTransactions();
+                updateBackupStatus();
+            } else {
+                const err = await response.text();
+                showToast('Save failed: ' + (err || 'Server error'), 'error');
+            }
+        } catch (e) {
+            showToast('Error saving data', 'error');
         }
-    } catch (e) {
-        console.error('Network or mutation error:', e);
-        showToast('Error saving data', 'error');
-    }
-    finally { setLoading(saveBtn, false, editingId ? 'Update Ledger Entry' : 'Save to Ledger'); }
-});
+        finally { setLoading(saveBtn, false, editingId ? 'Update Ledger Entry' : 'Save to Ledger'); }
+    });
+}
 
 async function deleteTransaction(id) {
     if (!confirm('Delete this entry?')) return;
@@ -498,11 +567,9 @@ async function deleteTransaction(id) {
             updateBackupStatus();
         } else {
             const err = await response.text();
-            console.error('Delete request failed:', response.status, err);
             showToast('Delete failed: ' + (err || 'Server error'), 'error');
         }
     } catch (e) {
-        console.error('Network or delete error:', e);
         showToast('Delete failed', 'error');
     }
 }
@@ -510,16 +577,7 @@ async function deleteTransaction(id) {
 function editTransaction(id) {
     const t = transactions.find(x => x.id === id);
     if (!t) return;
-    document.getElementById('date').value = t.date;
-    document.getElementById('type').value = t.entryType;
-    document.getElementById('amount').value = t.amount;
-    document.getElementById('category').value = t.category;
-    document.getElementById('source').value = t.expenseType;
-    document.getElementById('person').value = t.paidTo;
-    document.getElementById('notes').value = t.notes;
-    editingId = id;
-    saveBtn.querySelector('.btn-text').innerText = 'Update Ledger Entry';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    openModal('edit', t);
 }
 
 function triggerExport(format, btn) {
@@ -539,15 +597,18 @@ function validateField(input) {
 
 function validateForm() {
     let valid = true;
-    form.querySelectorAll('input[required], select[required]').forEach(i => { if(!validateField(i)) valid = false; });
+    if (form) {
+        form.querySelectorAll('input[required], select[required]').forEach(i => { if(!validateField(i)) valid = false; });
+    }
     return valid;
 }
 
 function resetForm() {
-    form.reset();
+    if (form) form.reset();
     editingId = null;
-    saveBtn.querySelector('.btn-text').innerText = 'Save to Ledger';
-    document.getElementById('date').valueAsDate = new Date();
+    if (saveBtnText) saveBtnText.innerText = 'Save to Ledger';
+    const dateInput = document.getElementById('date');
+    if (dateInput) dateInput.valueAsDate = new Date();
 }
 
 function escapeHtml(t) {

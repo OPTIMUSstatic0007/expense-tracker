@@ -53,80 +53,14 @@
             </div>
         </section>
 
-        <div class="content-layout">
-            <!-- Left Panel: Data Entry -->
-            <aside class="side-panel">
-                <section class="form-section">
-                    <div class="section-header">
-                        <h2>Record New Entry</h2>
-                    </div>
-                    <form id="exp-form" class="transaction-form" novalidate>
-                        <div class="input-grid">
-                            <div class="field">
-                                <label for="date">Date</label>
-                                <input type="date" id="date" required>
-                                <span class="error-msg" id="date-error"></span>
-                            </div>
-                            <div class="field">
-                                <label for="type">Entry Type</label>
-                                <select id="type" required>
-                                    <option value="Debit">Expense (-)</option>
-                                    <option value="Credit">Cash Added (+)</option>
-                                </select>
-                                <span class="error-msg" id="type-error"></span>
-                            </div>
-                            <div class="field">
-                                <label for="amount">Amount (₹)</label>
-                                <input type="number" id="amount" step="0.01" min="0.01" placeholder="0.00" required>
-                                <span class="error-msg" id="amount-error"></span>
-                            </div>
-                            <div class="field">
-                                <label for="category">Category</label>
-                                <select id="category" required>
-                                    <option value="" disabled selected>Select Category</option>
-                                    <option value="Groceries">Groceries</option>
-                                    <option value="Electricity">Electricity</option>
-                                    <option value="Water">Water</option>
-                                    <option value="Gas">Gas</option>
-                                    <option value="Maintenance">Maintenance</option>
-                                    <option value="Salary">Salary</option>
-                                    <option value="Deposit">Deposit</option>
-                                    <option value="Medical">Medical</option>
-                                    <option value="Rent">Rent</option>
-                                    <option value="Miscellaneous">Miscellaneous</option>
-                                </select>
-                                <span class="error-msg" id="category-error"></span>
-                            </div>
-                            <div class="field">
-                                <label for="source">Expense Type</label>
-                                <input type="text" id="source" placeholder="e.g. Cash, UPI" required>
-                                <span class="error-msg" id="source-error"></span>
-                            </div>
-                            <div class="field">
-                                <label for="person">Paid To / From</label>
-                                <input type="text" id="person" placeholder="Name">
-                                <span class="error-msg" id="person-error"></span>
-                            </div>
-                        </div>
-                        <div class="field notes-field">
-                            <label for="notes">Notes / Reference</label>
-                            <textarea id="notes" rows="2" placeholder="Reference details..."></textarea>
-                        </div>
-                        <button type="submit" id="save-btn" class="btn-primary">
-                            <span class="btn-text">Save to Ledger</span>
-                            <span class="btn-loader hidden"></span>
-                        </button>
-                    </form>
-                </section>
-            </aside>
-
-            <!-- Right Panel: Ledger & Filters -->
+        <div class="content-layout single-column">
+            <!-- Main Panel: Ledger & Filters -->
             <div class="main-panel">
                 <!-- Filters & Search Bar -->
                 <section class="filter-section">
                     <div class="filter-header">
                         <div class="search-bar">
-                            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" x2="16.65" y2="16.65"></line></svg>
+                            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                             <input type="text" id="search-input" placeholder="Search transactions (Category, Paid To, Notes)...">
                         </div>
                         <div class="export-actions">
@@ -271,6 +205,81 @@
         <div class="footer-tagline">Private • Offline-First • Secure</div>
         <div class="footer-credit">Developed by Aditya Khandagale</div>
     </footer>
+
+    <!-- Floating Action Button -->
+    <button id="fab-add" class="fab-add" aria-label="Add Transaction">+</button>
+
+    <!-- Modal System - Direct Viewport Overlays -->
+    <div id="modal-backdrop" class="modal-backdrop hidden"></div>
+    <div id="transaction-modal" class="modal-wrapper hidden">
+        <div class="modal-card">
+            <section class="form-section">
+                <div class="section-header">
+                    <h2 id="modal-title">Record New Entry</h2>
+                    <button id="modal-close" class="btn-close" aria-label="Close">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+                <form id="exp-form" class="transaction-form" novalidate>
+                    <div class="input-grid">
+                        <div class="field">
+                            <label for="date">Date</label>
+                            <input type="date" id="date" required>
+                            <span class="error-msg" id="date-error"></span>
+                        </div>
+                        <div class="field">
+                            <label for="type">Entry Type</label>
+                            <select id="type" required>
+                                <option value="Debit">Expense (-)</option>
+                                <option value="Credit">Cash Added (+)</option>
+                            </select>
+                            <span class="error-msg" id="type-error"></span>
+                        </div>
+                        <div class="field">
+                            <label for="amount">Amount (₹)</label>
+                            <input type="number" id="amount" step="0.01" min="0.01" placeholder="0.00" required>
+                            <span class="error-msg" id="amount-error"></span>
+                        </div>
+                        <div class="field">
+                            <label for="category">Category</label>
+                            <select id="category" required>
+                                <option value="" disabled selected>Select Category</option>
+                                <option value="Groceries">Groceries</option>
+                                <option value="Electricity">Electricity</option>
+                                <option value="Water">Water</option>
+                                <option value="Gas">Gas</option>
+                                <option value="Maintenance">Maintenance</option>
+                                <option value="Salary">Salary</option>
+                                <option value="Deposit">Deposit</option>
+                                <option value="Medical">Medical</option>
+                                <option value="Rent">Rent</option>
+                                <option value="Miscellaneous">Miscellaneous</option>
+                            </select>
+                            <span class="error-msg" id="category-error"></span>
+                        </div>
+                        <div class="field">
+                            <label for="source">Expense Type</label>
+                            <input type="text" id="source" placeholder="e.g. Cash, UPI" required>
+                            <span class="error-msg" id="source-error"></span>
+                        </div>
+                        <div class="field">
+                            <label for="person">Paid To / From</label>
+                            <input type="text" id="person" placeholder="Name">
+                            <span class="error-msg" id="person-error"></span>
+                        </div>
+                    </div>
+                    <div class="field notes-field">
+                        <label for="notes">Notes / Reference</label>
+                        <textarea id="notes" rows="2" placeholder="Reference details..."></textarea>
+                    </div>
+                    <button type="submit" id="save-btn" class="btn-primary">
+                        <span id="save-btn-text">Save to Ledger</span>
+                        <span class="btn-loader hidden"></span>
+                    </button>
+                </form>
+            </section>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>
