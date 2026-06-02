@@ -1,15 +1,29 @@
 package com.example.expensetracker
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.util.Log
+import android.webkit.URLUtil
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -21,12 +35,15 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.expensetracker.ui.theme.ExpenseTrackerTheme
@@ -43,6 +60,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             ExpenseTrackerTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    // Request Notification Permission for API 33+ to show Download Progress
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val permissionLauncher = rememberLauncherForActivityResult(
+                            ActivityResultContracts.RequestPermission()
+                        ) { isGranted ->
+                            Log.d("ExpenseTracker", "Notification permission granted: $isGranted")
+                        }
+                        LaunchedEffect(Unit) {
+                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+
                     ExpenseTrackerWebView(
                         url = APP_URL,
                         modifier = Modifier.padding(innerPadding)
@@ -56,9 +85,51 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
+    var uploadMessage by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+
+    // Register receiver to log download completion
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+                if (id != -1L) {
+                    Log.d("ExpenseTracker", "File saved to Downloads (ID: $id)")
+                }
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+        }
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+
+    val fileChooserLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val data = result.data
+            val results = if (data != null) {
+                val clipData = data.clipData
+                if (clipData != null) {
+                    Array(clipData.itemCount) { i -> clipData.getItemAt(i).uri }
+                } else {
+                    data.data?.let { arrayOf(it) }
+                }
+            } else null
+            uploadMessage?.onReceiveValue(results)
+        } else {
+            uploadMessage?.onReceiveValue(null)
+        }
+        uploadMessage = null
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
@@ -68,7 +139,9 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
                     settings.domStorageEnabled = true
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
-                    
+                    settings.allowFileAccess = true
+                    settings.allowContentAccess = true
+
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             isLoading = true
@@ -84,13 +157,57 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
                             request: WebResourceRequest?,
                             error: WebResourceError?
                         ) {
-                            // Only show error for the main frame
                             if (request?.isForMainFrame == true) {
                                 isLoading = false
                                 errorMessage = "Failed to connect to backend: ${error?.description ?: "Unknown error"}"
                             }
                         }
                     }
+
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onShowFileChooser(
+                            webView: WebView?,
+                            filePathCallback: ValueCallback<Array<Uri>>?,
+                            fileChooserParams: FileChooserParams?
+                        ): Boolean {
+                            uploadMessage?.onReceiveValue(null)
+                            uploadMessage = filePathCallback
+                            val intent = fileChooserParams?.createIntent()
+                            if (intent != null) {
+                                try {
+                                    fileChooserLauncher.launch(intent)
+                                } catch (e: Exception) {
+                                    uploadMessage = null
+                                    return false
+                                }
+                            } else {
+                                uploadMessage = null
+                                return false
+                            }
+                            return true
+                        }
+                    }
+
+                    setDownloadListener { downloadUrl, userAgent, contentDisposition, mimetype, contentLength ->
+                        Log.d("ExpenseTracker", "WebView download requested: $downloadUrl")
+                        val request = DownloadManager.Request(Uri.parse(downloadUrl)).apply {
+                            setMimeType(mimetype)
+                            addRequestHeader("User-Agent", userAgent)
+                            setDescription("Downloading file...")
+                            val fileName = URLUtil.guessFileName(downloadUrl, contentDisposition, mimetype)
+                            setTitle(fileName)
+                            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                        }
+                        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                        try {
+                            dm.enqueue(request)
+                            Log.d("ExpenseTracker", "DownloadManager enqueue success for $downloadUrl")
+                        } catch (e: Exception) {
+                            Log.e("ExpenseTracker", "Download failed: ${e.message}")
+                        }
+                    }
+
                     webViewInstance = this
                     loadUrl(url)
                 }
