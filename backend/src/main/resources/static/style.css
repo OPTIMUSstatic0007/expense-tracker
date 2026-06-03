@@ -580,15 +580,14 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
     z-index: 2000;
     transition: opacity 0.3s ease;
 }
 
-.modal {
+.modal-wrapper {
     position: fixed;
     z-index: 2001;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
@@ -597,22 +596,18 @@ body {
     justify-content: center;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    right: 0;
+    bottom: 0;
     pointer-events: none;
 }
 
-.modal.hidden, .modal-backdrop.hidden {
+.modal-wrapper.hidden, .modal-backdrop.hidden {
     display: none !important;
     opacity: 0;
     pointer-events: none;
 }
 
-.modal:not(.hidden) {
-    pointer-events: auto;
-}
-
-.modal-content {
+.modal-card {
     background: var(--surface-color);
     width: 100%;
     max-width: 600px;
@@ -620,24 +615,27 @@ body {
     box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
     max-height: 90vh;
     overflow-y: auto;
-    transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateY(20px);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    pointer-events: auto;
 }
 
-.modal:not(.hidden) .modal-content {
+.modal-wrapper:not(.hidden) .modal-card {
     transform: translateY(0);
+    opacity: 1;
 }
 
 @media (min-width: 769px) {
-    .modal {
+    .modal-wrapper {
         align-items: center; /* Desktop: Centered */
     }
-    .modal-content {
+    .modal-card {
         border-radius: 20px;
         transform: scale(0.9) translateY(20px);
         opacity: 0;
     }
-    .modal:not(.hidden) .modal-content {
+    .modal-wrapper:not(.hidden) .modal-card {
         transform: scale(1) translateY(0);
         opacity: 1;
     }
@@ -934,6 +932,20 @@ body {
     .mgmt-actions { flex-direction: column; width: 100%; gap: 12px; }
     .mgmt-actions .btn-outline { width: 100%; justify-content: center; padding: 14px; font-size: 0.9rem; }
     .backup-status-container { justify-content: center; gap: 12px; }
+
+    /* WebView-Safe Modal Fallback */
+    .modal-wrapper {
+        /* Override WebView 4000px document-height bug by strictly locking wrapper to the viewport */
+        height: 100vh;
+        height: 100dvh;
+    }
+    
+    .modal-card {
+        /* Strip all positioning hacks. Let the robust Flexbox engine safely calculate height! */
+        margin: 0;
+        width: 100%;
+        max-width: none;
+    }
 }
 
 /* Footer Styles */

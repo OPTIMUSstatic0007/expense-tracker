@@ -56,6 +56,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // ENABLE WEBVIEW DEVTOOLS
+        WebView.setWebContentsDebuggingEnabled(true)
         enableEdgeToEdge()
         setContent {
             ExpenseTrackerTheme {

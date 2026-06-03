@@ -195,6 +195,29 @@ function openModal(mode, data = null) {
 
     // Background Lock
     document.body.style.overflow = 'hidden';
+
+    // --- TEMPORARY ANDROID WEBVIEW DIAGNOSTICS ---
+    setTimeout(() => {
+        const card = document.querySelector('.modal-card');
+        if (!card || !modalWrapper) return;
+        const rect = card.getBoundingClientRect();
+        const style = window.getComputedStyle(card);
+        const wRect = modalWrapper.getBoundingClientRect();
+        
+        console.log("=== MODAL RUNTIME DIAGNOSTICS ===");
+        console.log("Window Size:", window.innerWidth, "x", window.innerHeight);
+        console.log("Wrapper Rect:", JSON.stringify({top: wRect.top, bottom: wRect.bottom, height: wRect.height}));
+        console.log("Card Rect:", JSON.stringify({top: rect.top, bottom: rect.bottom, height: rect.height, y: rect.y}));
+        console.log("Card OffsetHeight:", card.offsetHeight);
+        console.log("Card OffsetTop:", card.offsetTop);
+        console.log("Computed Position:", style.position);
+        console.log("Computed Transform:", style.transform);
+        console.log("Computed Opacity:", style.opacity);
+        console.log("Computed Visibility:", style.visibility);
+        console.log("Computed Display:", style.display);
+        console.log("Computed Z-Index:", style.zIndex);
+        console.log("=================================");
+    }, 500);
 }
 
 function closeModal() {
