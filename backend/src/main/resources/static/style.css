@@ -780,11 +780,15 @@ body {
     .field input, .field select, .field textarea { padding: 12px; font-size: 1rem; } /* Larger for touch */
     .btn-primary { padding: 14px; font-size: 1rem; position: sticky; bottom: 16px; z-index: 10; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
 
-    /* Filter Optimization */
-    .filter-section { padding: 16px; }
-    .filter-header { flex-direction: row; align-items: center; gap: 10px; }
+    /* Filter Optimization — premium compact density */
+    .filter-section { padding: 12px; margin-bottom: 16px; }
+    .filter-header { flex-direction: row; align-items: center; gap: 8px; margin-bottom: 10px; }
     /* Hide desktop export buttons on mobile — moved into overflow menu */
     .export-actions { display: none !important; }
+
+    /* Compact search input */
+    #search-input { padding: 8px 10px 8px 34px; font-size: 0.8125rem; border-radius: 8px; }
+    .search-icon { left: 10px; width: 14px; height: 14px; }
 
     /* ═══ MOBILE OVERFLOW MENU ═══ */
     .overflow-menu-anchor {
@@ -796,9 +800,9 @@ body {
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 40px;
-        height: 40px;
-        border-radius: var(--border-radius-md);
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
         border: 1px solid var(--border-color);
         background: var(--surface-color);
         color: var(--text-muted);
@@ -816,14 +820,14 @@ body {
 
     .overflow-dropdown {
         position: absolute;
-        top: calc(100% + 6px);
+        top: calc(100% + 4px);
         right: 0;
-        min-width: 180px;
+        min-width: 170px;
         background: var(--surface-color);
         border: 1px solid var(--border-color);
-        border-radius: var(--border-radius-lg);
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-        padding: 6px;
+        border-radius: 10px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        padding: 4px;
         /* Closed state */
         opacity: 0;
         transform: scale(0.92) translateY(-4px);
@@ -843,15 +847,15 @@ body {
     .overflow-item {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
         width: 100%;
-        padding: 12px 14px;
+        padding: 10px 12px;
         border: none;
         background: transparent;
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
         font-weight: 500;
         color: var(--text-main);
-        border-radius: var(--border-radius-md);
+        border-radius: 8px;
         cursor: pointer;
         transition: background 0.12s ease;
         -webkit-tap-highlight-color: transparent;
@@ -866,7 +870,10 @@ body {
         flex-shrink: 0;
     }
     /* ═══ End Mobile Overflow Menu ══════════════════════════ */
-    .filters-grid { grid-template-columns: 1fr 1fr; }
+
+    /* Compact filter dropdowns */
+    .filters-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .filter-field select { padding: 7px 10px; font-size: 0.8125rem; border-radius: 8px; }
 
     /* LEDGER OPTIMIZATION: Compact Rows */
     .ledger-table thead { display: none; } /* Hide headers on mobile */
