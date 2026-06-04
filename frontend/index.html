@@ -56,6 +56,19 @@
         <div class="content-layout single-column">
             <!-- Main Panel: Ledger & Filters -->
             <div class="main-panel">
+
+                <!-- Mobile Inline Form (mobile only, replaces modal on small screens) -->
+                <div id="mobile-inline-form" class="mobile-inline-form-wrapper" aria-hidden="true">
+                    <section class="form-section mobile-inline-card">
+                        <div class="section-header">
+                            <h2 id="mobile-modal-title">Record New Entry</h2>
+                            <button id="mobile-form-close" class="btn-close" aria-label="Close inline form">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+                    </section>
+                </div>
+
                 <!-- Filters & Search Bar -->
                 <section class="filter-section">
                     <div class="filter-header">

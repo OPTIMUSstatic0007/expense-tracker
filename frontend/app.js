@@ -19,13 +19,22 @@ const toastContainer = document.getElementById('toast-container');
 const loadMoreBtn = document.getElementById('load-more-btn');
 const loadMoreContainer = document.getElementById('load-more-container');
 
-// Modal Elements - Direct Viewport Overlays
+// Modal Elements - Desktop Overlay (untouched)
 const modalWrapper = document.getElementById('transaction-modal');
 const modalBackdrop = document.getElementById('modal-backdrop');
 const modalClose = document.getElementById('modal-close');
 const modalTitle = document.getElementById('modal-title');
 const fabAdd = document.getElementById('fab-add');
 const saveBtnText = document.getElementById('save-btn-text');
+
+// Mobile Inline Form Elements
+const mobileFormWrapper = document.getElementById('mobile-inline-form');
+const mobileFormClose = document.getElementById('mobile-form-close');
+const mobileFormTitle = document.getElementById('mobile-modal-title');
+const mobileFormCard = mobileFormWrapper ? mobileFormWrapper.querySelector('.mobile-inline-card') : null;
+
+// Helper: is the current viewport mobile?
+function isMobileView() { return window.innerWidth <= 768; }
 
 // Management Elements
 const backupBtn = document.getElementById('backup-db-btn');
@@ -127,15 +136,28 @@ function setupEventListeners() {
         if (e.target.files.length > 0) handleRestore(e.target.files[0]);
     });
 
-    // Modal Events - Critical Binding
-    if (fabAdd) fabAdd.addEventListener('click', () => openModal('create'));
+    // FAB: delegates to mobile inline form or desktop modal
+    if (fabAdd) fabAdd.addEventListener('click', () => {
+        if (isMobileView()) {
+            toggleMobileForm();
+        } else {
+            openModal('create');
+        }
+    });
+
+    // Desktop modal close buttons
     if (modalClose) modalClose.addEventListener('click', () => closeModal());
     if (modalBackdrop) modalBackdrop.addEventListener('click', () => closeModal());
 
-    // Desktop Close on ESC
+    // Mobile inline form close button
+    if (mobileFormClose) mobileFormClose.addEventListener('click', () => closeMobileForm());
+
+    // Close desktop modal on ESC (mobile form is document flow — no ESC needed)
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modalWrapper && !modalWrapper.classList.contains('hidden')) {
-            closeModal();
+        if (e.key === 'Escape') {
+            if (!isMobileView() && modalWrapper && !modalWrapper.classList.contains('hidden')) {
+                closeModal();
+            }
         }
     });
 
@@ -157,20 +179,35 @@ function setupEventListeners() {
     }
 }
 
+// ─── Mobile Inline Form helpers ───────────────────────────────────────────
+
 /**
- * Structural Fix: Modal Control logic
+ * Ensures the shared <form> lives inside the mobile card section-header's
+ * sibling slot. We physically move it once so markup is never duplicated.
  */
-function openModal(mode, data = null) {
-    console.log("Opening Modal | Mode:", mode);
-    if (!modalWrapper || !modalBackdrop) {
-        console.error("Modal elements missing from DOM!");
-        return;
+function ensureFormInMobileCard() {
+    const expForm = document.getElementById('exp-form');
+    if (!mobileFormCard || !expForm) return;
+    // If form is NOT already a child of the mobile card, move it in
+    if (!mobileFormCard.contains(expForm)) {
+        mobileFormCard.appendChild(expForm);
     }
+}
 
+/**
+ * Ensures the shared <form> lives back inside the desktop .modal-card.
+ */
+function ensureFormInDesktopModal() {
+    const expForm = document.getElementById('exp-form');
+    const desktopCard = document.querySelector('#transaction-modal .modal-card section.form-section');
+    if (!desktopCard || !expForm) return;
+    if (!desktopCard.contains(expForm)) {
+        desktopCard.appendChild(expForm);
+    }
+}
+
+function populateFormFields(mode, data) {
     if (mode === 'edit' && data) {
-        modalTitle.innerText = 'Edit Entry';
-        if (saveBtnText) saveBtnText.innerText = 'Update Ledger Entry';
-
         document.getElementById('date').value = data.date;
         document.getElementById('type').value = data.entryType;
         document.getElementById('amount').value = data.amount;
@@ -180,32 +217,80 @@ function openModal(mode, data = null) {
         document.getElementById('notes').value = data.notes;
         editingId = data.id;
     } else {
-        modalTitle.innerText = 'Record New Entry';
-        if (saveBtnText) saveBtnText.innerText = 'Save to Ledger';
         resetForm();
     }
+}
 
-    // Atomic visibility toggle
+function toggleMobileForm(mode = 'create', data = null) {
+    if (!mobileFormWrapper) return;
+    const isOpen = mobileFormWrapper.classList.contains('is-open');
+    if (isOpen) {
+        closeMobileForm();
+    } else {
+        openMobileForm(mode, data);
+    }
+}
+
+function openMobileForm(mode = 'create', data = null) {
+    if (!mobileFormWrapper) return;
+
+    ensureFormInMobileCard();
+    populateFormFields(mode, data);
+
+    const title = mode === 'edit' ? 'Edit Entry' : 'Record New Entry';
+    if (mobileFormTitle) mobileFormTitle.innerText = title;
+    if (saveBtnText) saveBtnText.innerText = mode === 'edit' ? 'Update Ledger Entry' : 'Save to Ledger';
+
+    mobileFormWrapper.classList.add('is-open');
+    mobileFormWrapper.setAttribute('aria-hidden', 'false');
+    if (fabAdd) fabAdd.classList.add('form-open');
+
+    // Scroll the inline form into view smoothly
+    setTimeout(() => {
+        mobileFormWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+}
+
+function closeMobileForm() {
+    if (!mobileFormWrapper) return;
+    mobileFormWrapper.classList.remove('is-open');
+    mobileFormWrapper.setAttribute('aria-hidden', 'true');
+    if (fabAdd) fabAdd.classList.remove('form-open');
+    resetForm();
+}
+
+// ─── Desktop Modal helpers (UNTOUCHED logic) ───────────────────────────────
+
+/**
+ * Desktop-only modal open. Called only when !isMobileView().
+ */
+function openModal(mode, data = null) {
+    if (!isMobileView()) {
+        // On desktop, make sure form lives back inside the desktop modal card
+        ensureFormInDesktopModal();
+    }
+
+    if (!modalWrapper || !modalBackdrop) {
+        console.error('Modal elements missing from DOM!');
+        return;
+    }
+
+    const title = mode === 'edit' ? 'Edit Entry' : 'Record New Entry';
+    if (modalTitle) modalTitle.innerText = title;
+    if (saveBtnText) saveBtnText.innerText = mode === 'edit' ? 'Update Ledger Entry' : 'Save to Ledger';
+
+    populateFormFields(mode, data);
+
     modalBackdrop.classList.remove('hidden');
     modalWrapper.classList.remove('hidden');
-
-    console.log("Modal Wrapper Class:", modalWrapper.className);
-    console.log("Modal Card visible?", !!document.querySelector('.modal-card')?.offsetParent);
-    console.log("Form attached?", !!document.getElementById('exp-form'));
-
-    // Background Lock
     document.body.style.overflow = 'hidden';
 }
 
 function closeModal() {
     if (!modalWrapper || !modalBackdrop) return;
-
     modalWrapper.classList.add('hidden');
     modalBackdrop.classList.add('hidden');
-
-    // Background Unlock
     document.body.style.overflow = '';
-
     resetForm();
 }
 
@@ -541,7 +626,12 @@ if (form) {
             });
             if (response.ok) {
                 showToast(editingId ? 'Entry updated' : 'Entry added');
-                closeModal();
+                // Dismiss the correct form surface depending on viewport
+                if (isMobileView()) {
+                    closeMobileForm();
+                } else {
+                    closeModal();
+                }
                 currentPage = 1;
                 loadTransactions();
                 updateBackupStatus();
@@ -577,7 +667,11 @@ async function deleteTransaction(id) {
 function editTransaction(id) {
     const t = transactions.find(x => x.id === id);
     if (!t) return;
-    openModal('edit', t);
+    if (isMobileView()) {
+        openMobileForm('edit', t);
+    } else {
+        openModal('edit', t);
+    }
 }
 
 function triggerExport(format, btn) {

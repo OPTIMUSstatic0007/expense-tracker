@@ -1,3 +1,4 @@
+<!-- RUNTIME TEST 999 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -56,6 +57,24 @@
         <div class="content-layout single-column">
             <!-- Main Panel: Ledger & Filters -->
             <div class="main-panel">
+
+                <!-- ═══ MOBILE INLINE FORM (replaces modal on ≤768px) ═══
+                     Hidden by default via CSS max-height:0.
+                     JS moves #exp-form into .mobile-inline-body on open.
+                     No overlay · No fixed position · No z-index stacking. -->
+                <div id="mobile-inline-form" class="mobile-inline-wrapper" aria-hidden="true">
+                    <div class="mobile-inline-card">
+                        <div class="mobile-inline-header">
+                            <h2 id="mobile-form-title">Record New Entry</h2>
+                            <button id="mobile-form-close" class="btn-close" aria-label="Close form">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+                        <!-- form#exp-form is moved here by JS on mobile open -->
+                        <div class="mobile-inline-body"></div>
+                    </div>
+                </div>
+
                 <!-- Filters & Search Bar -->
                 <section class="filter-section">
                     <div class="filter-header">

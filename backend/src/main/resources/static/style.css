@@ -938,16 +938,69 @@ body {
     .mgmt-actions .btn-outline { width: 100%; justify-content: center; padding: 14px; font-size: 0.9rem; }
     .backup-status-container { justify-content: center; gap: 12px; }
 
-    /* ANDROID WEBVIEW MODAL FIX */
-    .modal-wrapper {
-        height: 100dvh;
-        height: 100vh;
+    /* ═══════════════════════════════════════════════════════════
+       MOBILE INLINE FORM — replaces modal overlay on ≤768px
+       Architecture: normal document flow, no fixed/overlay/z-index
+       ═══════════════════════════════════════════════════════════ */
+
+    /* Outer wrapper — collapses to zero height when closed */
+    .mobile-inline-wrapper {
+        overflow: hidden;
+        max-height: 0;
+        opacity: 0;
+        margin-bottom: 0;
+        /* Smooth push-down expand — WebView-safe, no transform hacks */
+        transition:
+            max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+            opacity    0.3s ease,
+            margin-bottom 0.4s ease;
+        will-change: max-height;
     }
 
-    .modal-card {
-        width: 100%;
-        max-width: 100%;
+    /* Open state — toggled by JS adding .is-open */
+    .mobile-inline-wrapper.is-open {
+        max-height: 1000px;   /* larger than any realistic form height */
+        opacity: 1;
+        margin-bottom: 20px;
     }
+
+    /* Card visual — matches design system, no shadow complexity */
+    .mobile-inline-card {
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-lg);
+        box-shadow: 0 2px 12px rgba(37, 99, 235, 0.07);
+        overflow: hidden;
+    }
+
+    /* Header row inside the inline card */
+    .mobile-inline-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .mobile-inline-header h2 {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-main);
+    }
+
+    /* Body slot — the real #exp-form is appended here by JS */
+    .mobile-inline-body {
+        /* inherits transaction-form padding from existing .transaction-form rule */
+    }
+
+    /* FAB visual feedback: rotates to × and turns red while form is open */
+    .fab-add.fab-form-open {
+        background: var(--danger);
+        box-shadow: 0 4px 16px rgba(239, 68, 68, 0.45);
+        transform: rotate(45deg) scale(1.0);
+    }
+
+    /* ═══ End Mobile Inline Form ══════════════════════════════ */
 }
 
 /* Footer Styles */

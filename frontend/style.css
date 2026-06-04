@@ -903,6 +903,43 @@ body {
     .ledger-table td[data-label="Transaction"],
     .ledger-table td[data-label="Actions"] { display: none; }
 
+    /* ── Mobile Inline Form ─────────────────────────────────── */
+    /* Hidden by default — no overlay, no z-index stacking */
+    .mobile-inline-form-wrapper {
+        overflow: hidden;
+        max-height: 0;
+        opacity: 0;
+        margin-bottom: 0;
+        transition:
+            max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+            opacity 0.28s ease,
+            margin-bottom 0.38s ease;
+        will-change: max-height, opacity;
+    }
+
+    /* Expanded state toggled by JS */
+    .mobile-inline-form-wrapper.is-open {
+        max-height: 900px;   /* tall enough for the full form */
+        opacity: 1;
+        margin-bottom: 24px;
+    }
+
+    .mobile-inline-card {
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-lg);
+        box-shadow: 0 4px 24px rgba(37, 99, 235, 0.08);
+        overflow: hidden;
+    }
+
+    /* FAB rotates to × while form is open */
+    .fab-add.form-open {
+        background: var(--danger);
+        box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+        transform: rotate(45deg);
+    }
+
+    /* ── End Mobile Inline Form ──────────────────────────────── */
+
     /* Admin Section */
     .mgmt-section { flex-direction: column; align-items: stretch; text-align: center; padding: 24px 16px; gap: 20px; }
     .mgmt-actions { flex-direction: column; width: 100%; gap: 12px; }
