@@ -429,48 +429,51 @@ function renderTable(data) {
         const isCredit = t.entryType === 'Credit';
         const row = document.createElement('tr');
 
+        // ✅ AFTER — divs wrapped in a valid <td colspan="9">
         if (isMobile) {
             row.innerHTML = `
-                <div class="row-compact" onclick="toggleRow(this)">
-                    <div class="mobile-date-col">${t.date}</div>
-                    <div class="mobile-indicator">
-                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                        </svg>
-                    </div>
-                    <div class="mobile-category-col">${escapeHtml(t.category)}</div>
-                    <div class="mobile-amount-col ${isCredit ? 'credit-text' : 'debit-text'}">
-                        ${isCredit ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </div>
-                </div>
-                <div class="row-details">
-                    <div class="details-grid">
-                        <div class="detail-item">
-                            <span class="detail-label">PAID TO / FROM</span>
-                            <span class="detail-value">${escapeHtml(t.paidTo || '-')}</span>
+                <td colspan="9" style="padding:0;border:none;">
+                    <div class="row-compact" onclick="toggleRow(this)">
+                        <div class="mobile-date-col">${t.date}</div>
+                        <div class="mobile-indicator">
+                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
                         </div>
-                        <div class="detail-item">
-                            <span class="detail-label">EXPENSE TYPE</span>
-                            <span class="detail-value">${escapeHtml(t.expenseType || '-')}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">BALANCE AFTER</span>
-                            <span class="detail-value">₹${parseFloat(t.balanceAfter).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">ENTRY TYPE</span>
-                            <span class="detail-value">${t.entryType}</span>
-                        </div>
-                        <div class="detail-item detail-full-width">
-                            <span class="detail-label">NOTES / REFERENCE</span>
-                            <span class="detail-value">${escapeHtml(t.notes || 'No reference notes')}</span>
+                        <div class="mobile-category-col">${escapeHtml(t.category)}</div>
+                        <div class="mobile-amount-col ${isCredit ? 'credit-text' : 'debit-text'}">
+                            ${isCredit ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </div>
                     </div>
-                    <div class="details-actions">
-                        <button class="btn-action-mobile" onclick="event.stopPropagation(); editTransaction(${t.id})">Edit Entry</button>
-                        <button class="btn-action-mobile" onclick="event.stopPropagation(); deleteTransaction(${t.id})">Delete</button>
+                    <div class="row-details">
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">PAID TO / FROM</span>
+                                <span class="detail-value">${escapeHtml(t.paidTo || '-')}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">EXPENSE TYPE</span>
+                                <span class="detail-value">${escapeHtml(t.expenseType || '-')}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">BALANCE AFTER</span>
+                                <span class="detail-value">₹${parseFloat(t.balanceAfter).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">ENTRY TYPE</span>
+                                <span class="detail-value">${t.entryType}</span>
+                            </div>
+                            <div class="detail-item detail-full-width">
+                                <span class="detail-label">NOTES / REFERENCE</span>
+                                <span class="detail-value">${escapeHtml(t.notes || 'No reference notes')}</span>
+                            </div>
+                        </div>
+                        <div class="details-actions">
+                            <button class="btn-action-mobile" onclick="event.stopPropagation(); editTransaction(${t.id})">Edit Entry</button>
+                            <button class="btn-action-mobile" onclick="event.stopPropagation(); deleteTransaction(${t.id})">Delete</button>
+                        </div>
                     </div>
-                </div>
+                </td>
             `;
         } else {
             row.innerHTML = `

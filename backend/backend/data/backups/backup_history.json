@@ -77,34 +77,6 @@
         "balanceAtBackup": "4999.98"
     },
     {
-        "filename": "ledger_backup_2026_06_03_16_11_22.db",
-        "type": "auto",
-        "timestamp": "2026-06-03T16:11:22.830768500",
-        "transactionCount": 0,
-        "balanceAtBackup": "0.00"
-    },
-    {
-        "filename": "ledger_backup_2026_06_03_16_13_24.db",
-        "type": "auto",
-        "timestamp": "2026-06-03T16:13:24.565364300",
-        "transactionCount": 0,
-        "balanceAtBackup": "0.00"
-    },
-    {
-        "filename": "ledger_backup_2026_06_03_16_29_23.db",
-        "type": "auto",
-        "timestamp": "2026-06-03T16:29:23.948559",
-        "transactionCount": 0,
-        "balanceAtBackup": "0.00"
-    },
-    {
-        "filename": "ledger_backup_2026_06_03_16_41_15.db",
-        "type": "auto",
-        "timestamp": "2026-06-03T16:41:15.463240600",
-        "transactionCount": 0,
-        "balanceAtBackup": "0.00"
-    },
-    {
         "filename": "ledger_backup_2026_06_03_16_48_03.db",
         "type": "auto",
         "timestamp": "2026-06-03T16:48:03.800652600",
@@ -159,5 +131,33 @@
         "timestamp": "2026-06-03T18:55:47.841203500",
         "transactionCount": 56,
         "balanceAtBackup": "4999.98"
+    },
+    {
+        "filename": "ledger_backup_2026_06_04_21_11_02.db",
+        "type": "auto",
+        "timestamp": "2026-06-04T21:11:02.999864100",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_04_21_27_31.db",
+        "type": "auto",
+        "timestamp": "2026-06-04T21:27:31.568970700",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_04_22_20_37.db",
+        "type": "auto",
+        "timestamp": "2026-06-04T22:20:37.709233100",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_04_22_41_32.db",
+        "type": "auto",
+        "timestamp": "2026-06-04T22:41:32.521674800",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
     }
 ]

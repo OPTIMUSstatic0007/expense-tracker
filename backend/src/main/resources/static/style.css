@@ -586,35 +586,40 @@ body {
     z-index: 2000;
     transition: opacity 0.3s ease;
 }
-
-.modal-wrapper {
-    position: fixed;
-    z-index: 2001;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
-    display: flex;
-    align-items: flex-end; /* Mobile: Bottom sheet */
-    justify-content: center;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-}
-
+ .modal-wrapper {
+     position: fixed;
+     z-index: 2001;
+     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+     display: flex;
+     align-items: flex-end;
+     justify-content: center;
+     top: 0;
+     left: 0;
+     right: 0;
+     bottom: 0;
+     pointer-events: none;
+     -webkit-transform: translateZ(0);  /* CRITICAL: forces WebView GPU layer resolution */
+     transform: translateZ(0);
+     will-change: transform;
+ }
 .modal-wrapper.hidden, .modal-backdrop.hidden {
     display: none !important;
     opacity: 0;
     pointer-events: none;
 }
 
+/* ✅ AFTER */
 .modal-card {
     background: var(--surface-color);
     width: 100%;
     max-width: 600px;
-    border-radius: 24px 24px 0 0; /* Bottom sheet corners */
+    border-radius: 24px 24px 0 0;
     box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
+    min-height: 300px;          /* CRITICAL: forces WebView to allocate height */
     max-height: 90vh;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;             /* CRITICAL: prevents flexbox collapse in WebView */
     transform: translateY(20px);
     opacity: 0;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
@@ -933,18 +938,15 @@ body {
     .mgmt-actions .btn-outline { width: 100%; justify-content: center; padding: 14px; font-size: 0.9rem; }
     .backup-status-container { justify-content: center; gap: 12px; }
 
-    /* WebView-Safe Modal Fallback */
+    /* ANDROID WEBVIEW MODAL FIX */
     .modal-wrapper {
-        /* Override WebView 4000px document-height bug by strictly locking wrapper to the viewport */
-        height: 100vh;
         height: 100dvh;
+        height: 100vh;
     }
-    
+
     .modal-card {
-        /* Strip all positioning hacks. Let the robust Flexbox engine safely calculate height! */
-        margin: 0;
         width: 100%;
-        max-width: none;
+        max-width: 100%;
     }
 }
 
