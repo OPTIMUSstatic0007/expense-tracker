@@ -92,9 +92,46 @@ function setupEventListeners() {
         }
     });
 
-    // Export Handlers
+    // Export Handlers (desktop — always bound, buttons exist in DOM)
     if (exportExcelBtn) exportExcelBtn.addEventListener('click', () => triggerExport('excel', exportExcelBtn));
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => triggerExport('csv', exportCsvBtn));
+
+    // ═══ MOBILE OVERFLOW MENU ═══
+    const overflowBtn = document.getElementById('overflow-menu-btn');
+    const overflowDropdown = document.getElementById('overflow-dropdown');
+
+    if (overflowBtn && overflowDropdown) {
+        // Toggle dropdown on ⋮ tap
+        overflowBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = overflowDropdown.classList.toggle('is-open');
+            overflowBtn.setAttribute('aria-expanded', isOpen);
+            overflowDropdown.setAttribute('aria-hidden', !isOpen);
+        });
+
+        // Menu item clicks — reuse existing triggerExport()
+        overflowDropdown.querySelectorAll('.overflow-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const format = item.dataset.export;
+                const originalBtn = format === 'excel' ? exportExcelBtn : exportCsvBtn;
+                triggerExport(format, originalBtn);
+                // Close menu after action
+                overflowDropdown.classList.remove('is-open');
+                overflowBtn.setAttribute('aria-expanded', 'false');
+                overflowDropdown.setAttribute('aria-hidden', 'true');
+            });
+        });
+
+        // Click outside closes dropdown
+        document.addEventListener('click', (e) => {
+            if (!overflowDropdown.classList.contains('is-open')) return;
+            if (!overflowBtn.contains(e.target) && !overflowDropdown.contains(e.target)) {
+                overflowDropdown.classList.remove('is-open');
+                overflowBtn.setAttribute('aria-expanded', 'false');
+                overflowDropdown.setAttribute('aria-hidden', 'true');
+            }
+        });
+    }
 
     // Backup & Restore
     if (snapshotBtn) snapshotBtn.addEventListener('click', async () => {

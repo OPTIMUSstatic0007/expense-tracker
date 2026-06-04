@@ -364,6 +364,9 @@ body {
     gap: 8px;
 }
 
+/* Overflow menu — hidden on desktop, visible only on mobile */
+.overflow-menu-anchor { display: none; }
+
 .btn-outline {
     display: flex;
     align-items: center;
@@ -779,9 +782,90 @@ body {
 
     /* Filter Optimization */
     .filter-section { padding: 16px; }
-    .filter-header { flex-direction: column; align-items: stretch; gap: 12px; }
-    .export-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .export-actions .btn-outline { width: 100%; justify-content: center; padding: 10px; }
+    .filter-header { flex-direction: row; align-items: center; gap: 10px; }
+    /* Hide desktop export buttons on mobile — moved into overflow menu */
+    .export-actions { display: none !important; }
+
+    /* ═══ MOBILE OVERFLOW MENU ═══ */
+    .overflow-menu-anchor {
+        display: block;
+        position: relative;
+    }
+
+    .overflow-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: var(--border-radius-md);
+        border: 1px solid var(--border-color);
+        background: var(--surface-color);
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .overflow-btn:active,
+    .overflow-btn[aria-expanded="true"] {
+        background: var(--primary-soft);
+        color: var(--primary);
+        border-color: rgba(37, 99, 235, 0.2);
+    }
+
+    .overflow-dropdown {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        min-width: 180px;
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-lg);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        padding: 6px;
+        /* Closed state */
+        opacity: 0;
+        transform: scale(0.92) translateY(-4px);
+        transform-origin: top right;
+        pointer-events: none;
+        transition:
+            opacity   0.18s cubic-bezier(0.4, 0, 0.2, 1),
+            transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .overflow-dropdown.is-open {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        pointer-events: auto;
+    }
+
+    .overflow-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 12px 14px;
+        border: none;
+        background: transparent;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--text-main);
+        border-radius: var(--border-radius-md);
+        cursor: pointer;
+        transition: background 0.12s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .overflow-item:active {
+        background: var(--surface-alt);
+    }
+
+    .overflow-item svg {
+        color: var(--text-muted);
+        flex-shrink: 0;
+    }
+    /* ═══ End Mobile Overflow Menu ══════════════════════════ */
     .filters-grid { grid-template-columns: 1fr 1fr; }
 
     /* LEDGER OPTIMIZATION: Compact Rows */
