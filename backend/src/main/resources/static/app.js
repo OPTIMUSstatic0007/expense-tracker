@@ -1029,3 +1029,94 @@ async function fetchDbStats() {
         els.lastExport.innerText = lastExportTime || 'Never';
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// NEW MOBILE FORM INTERACTIONS
+// ═══════════════════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Segmented Toggle Logic
+    const toggleBtns = document.querySelectorAll('.toggle-btn');
+    const typeSelect = document.getElementById('type');
+
+    toggleBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            toggleBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (typeSelect) {
+                typeSelect.value = btn.dataset.value;
+            }
+        });
+    });
+
+    // Quick Chips Logic
+    const chips = document.querySelectorAll('.chip');
+    const amountInput = document.getElementById('amount');
+
+    chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            if (amountInput) {
+                const currentVal = parseFloat(amountInput.value) || 0;
+                const addVal = parseFloat(chip.dataset.amount);
+                amountInput.value = (currentVal + addVal).toFixed(2);
+            }
+        });
+    });
+
+    // Collapsible Details Logic
+    const detailsToggle = document.getElementById('details-toggle');
+    if (detailsToggle) {
+        detailsToggle.addEventListener('click', () => {
+            detailsToggle.classList.toggle('open');
+        });
+    }
+
+    // Cancel Button Logic
+    const cancelBtn = document.getElementById('cancel-btn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            if (isMobile()) {
+                closeMobileForm();
+            } else {
+                closeModal();
+            }
+        });
+    }
+});
+
+// Update toggle buttons when form is populated (e.g. edit mode)
+const originalPopulateForm = populateForm;
+populateForm = function(mode, data) {
+    originalPopulateForm(mode, data);
+
+    // Sync UI with selected type
+    const typeSelect = document.getElementById('type');
+    if (typeSelect) {
+        const toggleBtns = document.querySelectorAll('.toggle-btn');
+        toggleBtns.forEach(btn => {
+            if (btn.dataset.value === typeSelect.value) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+};
+
+// Reset Details section when form is reset
+const originalResetForm = resetForm;
+resetForm = function() {
+    originalResetForm();
+    const detailsToggle = document.getElementById('details-toggle');
+    if (detailsToggle) {
+        detailsToggle.classList.remove('open');
+    }
+    const toggleBtns = document.querySelectorAll('.toggle-btn');
+    toggleBtns.forEach(btn => {
+        if (btn.dataset.value === 'Debit') {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+};
