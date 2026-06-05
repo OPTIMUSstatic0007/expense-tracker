@@ -65,6 +65,18 @@
                     </div>
                 </div>
             </div>
+            <!-- ANALYTICS Section -->
+            <div class="nav-drawer-section">
+                <div class="nav-drawer-section-title">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+                    Insights
+                </div>
+                <button id="drawer-analytics-link" class="nav-drawer-item nav-drawer-link-btn">
+                    <span>Analytics</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+            </div>
+
             <!-- FUTURE Section — placeholders -->
             <div class="nav-drawer-section">
                 <div class="nav-drawer-section-title">
@@ -72,11 +84,71 @@
                     Future
                 </div>
                 <div class="nav-drawer-item placeholder-item">Settings</div>
-                <div class="nav-drawer-item placeholder-item">Analytics</div>
             </div>
         </div>
         <div class="nav-drawer-footer">
             <span>ExpenseTracker <span class="nav-drawer-version">v1.0</span></span>
+        </div>
+    </aside>
+
+    <!-- ═══ MOBILE ANALYTICS PANEL (hidden on desktop) ═══ -->
+    <div id="analytics-scrim" class="db-center-scrim" aria-hidden="true"></div>
+    <aside id="analytics-panel" class="db-center-panel" aria-hidden="true">
+        <div class="db-center-header">
+            <div class="db-center-header-left">
+                <button id="analytics-close" class="db-center-back-btn" aria-label="Close Analytics">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                <h2>Analytics</h2>
+            </div>
+        </div>
+        <div class="db-center-body analytics-body">
+            <!-- Smart Insight Cards -->
+            <div class="analytics-insights-grid">
+                <div class="insight-card">
+                    <div class="insight-title">Highest Spend</div>
+                    <div class="insight-value" id="insight-highest-spend-cat">—</div>
+                    <div class="insight-sub" id="insight-highest-spend-val">₹0</div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-title">Avg Daily Spend</div>
+                    <div class="insight-value" id="insight-avg-daily">₹0</div>
+                    <div class="insight-sub" id="insight-avg-daily-sub">This Month</div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-title">Savings Rate</div>
+                    <div class="insight-value" id="insight-savings">0%</div>
+                    <div class="insight-sub" id="insight-savings-sub">Of Total Income</div>
+                </div>
+            </div>
+
+            <!-- Chart 1: Monthly Expense Trend -->
+            <div class="db-center-card analytics-chart-card">
+                <div class="db-center-card-title">Monthly Expense Trend</div>
+                <div class="chart-container">
+                    <canvas id="monthlyTrendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: Category Breakdown -->
+            <div class="db-center-card analytics-chart-card">
+                <div class="db-center-card-title">Category Breakdown (Expenses)</div>
+                <div class="chart-container">
+                    <canvas id="categoryBreakdownChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 3: Income vs Expense -->
+            <div class="db-center-card analytics-chart-card">
+                <div class="db-center-card-title">Income vs Expense</div>
+                <div class="chart-container">
+                    <canvas id="incomeVsExpenseChart"></canvas>
+                </div>
+            </div>
+
+            <div class="analytics-loader hidden" id="analytics-loader">
+                <div class="spinner"></div> Loading Analytics...
+            </div>
         </div>
     </aside>
 
@@ -493,6 +565,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

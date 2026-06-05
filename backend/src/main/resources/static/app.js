@@ -390,6 +390,9 @@ function setupNavDrawer() {
 
     // Wire up DB Center panel navigation
     setupDbCenterPanel();
+
+    // Wire up Analytics panel navigation
+    setupAnalyticsPanel();
 }
 
 function openNavDrawer() {
@@ -901,6 +904,299 @@ function escapeHtml(t) {
     const d = document.createElement('div');
     d.textContent = t;
     return d.innerHTML;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ANALYTICS PANEL — dedicated insight dashboard
+// ═══════════════════════════════════════════════════════════════════
+
+function setupAnalyticsPanel() {
+    const link     = document.getElementById('drawer-analytics-link');
+    const panel    = document.getElementById('analytics-panel');
+    const scrim    = document.getElementById('analytics-scrim');
+    const closeBtn = document.getElementById('analytics-close');
+    if (!link || !panel) return;
+
+    link.addEventListener('click', () => {
+        closeNavDrawer();
+        setTimeout(() => openAnalyticsPanel(), 320);
+    });
+
+    if (closeBtn) closeBtn.addEventListener('click', () => closeAnalyticsPanel());
+    if (scrim) scrim.addEventListener('click', () => closeAnalyticsPanel());
+}
+
+function openAnalyticsPanel() {
+    const panel = document.getElementById('analytics-panel');
+    const scrim = document.getElementById('analytics-scrim');
+    if (!panel) return;
+
+    panel.classList.add('is-open');
+    panel.setAttribute('aria-hidden', 'false');
+    if (scrim) {
+        scrim.classList.add('is-visible');
+        scrim.setAttribute('aria-hidden', 'false');
+    }
+
+    loadAnalyticsData();
+}
+
+function closeAnalyticsPanel() {
+    const panel = document.getElementById('analytics-panel');
+    const scrim = document.getElementById('analytics-scrim');
+    if (!panel) return;
+
+    panel.classList.remove('is-open');
+    panel.setAttribute('aria-hidden', 'true');
+    if (scrim) {
+        scrim.classList.remove('is-visible');
+        scrim.setAttribute('aria-hidden', 'true');
+    }
+}
+
+let analyticsCharts = {};
+
+async function loadAnalyticsData() {
+    const loader = document.getElementById('analytics-loader');
+    if (loader) loader.classList.remove('hidden');
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/all`);
+        if (!response.ok) throw new Error('Failed to fetch analytics data');
+        const data = await response.json();
+
+        processAnalyticsData(data);
+    } catch (e) {
+        showToast('Failed to load analytics', 'error');
+    } finally {
+        if (loader) loader.classList.add('hidden');
+    }
+}
+
+function processAnalyticsData(data) {
+    if (!data || data.length === 0) return;
+
+    const now = new Date();
+    const currentYear = now.getFullYear().toString();
+    const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+
+    // Insight Calculations
+    let currentMonthExpenses = 0;
+    let currentMonthIncome = 0;
+    let totalExpenses = 0;
+    let categoryTotals = {};
+    let dailyExpenses = {};
+
+    data.forEach(t => {
+        const amount = parseFloat(t.amount);
+        const [y, m, d] = t.date.split('-');
+
+        if (t.entryType === 'Debit') {
+            totalExpenses += amount;
+            categoryTotals[t.category] = (categoryTotals[t.category] || 0) + amount;
+
+            if (y === currentYear && m === currentMonth) {
+                currentMonthExpenses += amount;
+                dailyExpenses[d] = (dailyExpenses[d] || 0) + amount;
+            }
+        } else if (t.entryType === 'Credit') {
+            if (y === currentYear && m === currentMonth) {
+                currentMonthIncome += amount;
+            }
+        }
+    });
+
+    // 1. Highest Spend Category
+    let highestCat = '—';
+    let highestAmount = 0;
+    for (const [cat, amt] of Object.entries(categoryTotals)) {
+        if (amt > highestAmount) {
+            highestAmount = amt;
+            highestCat = cat;
+        }
+    }
+
+    document.getElementById('insight-highest-spend-cat').innerText = highestCat;
+    document.getElementById('insight-highest-spend-val').innerText = `₹${highestAmount.toFixed(2)}`;
+
+    // 2. Avg Daily Spend (Current Month)
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const currentDay = now.getDate();
+    const avgDaily = currentMonthExpenses / currentDay; // avg up to today
+
+    document.getElementById('insight-avg-daily').innerText = `₹${avgDaily.toFixed(0)}`;
+
+    // 3. Savings Rate (Current Month)
+    let savingsRate = 0;
+    if (currentMonthIncome > 0) {
+        const savings = currentMonthIncome - currentMonthExpenses;
+        savingsRate = savings > 0 ? (savings / currentMonthIncome) * 100 : 0;
+    }
+    document.getElementById('insight-savings').innerText = `${savingsRate.toFixed(1)}%`;
+
+    // Render Charts
+    renderCharts(data);
+}
+
+function renderCharts(data) {
+    if (typeof Chart === 'undefined') return;
+
+    // Destroy existing chart instances to avoid canvas reuse errors
+    if (analyticsCharts.monthlyTrend) analyticsCharts.monthlyTrend.destroy();
+    if (analyticsCharts.categoryBreakdown) analyticsCharts.categoryBreakdown.destroy();
+    if (analyticsCharts.incomeVsExpense) analyticsCharts.incomeVsExpense.destroy();
+
+    const currentYear = new Date().getFullYear().toString();
+
+    // Aggregation Logic
+    let monthlyExpenses = { '01':0, '02':0, '03':0, '04':0, '05':0, '06':0, '07':0, '08':0, '09':0, '10':0, '11':0, '12':0 };
+    let monthlyIncome = { '01':0, '02':0, '03':0, '04':0, '05':0, '06':0, '07':0, '08':0, '09':0, '10':0, '11':0, '12':0 };
+    let categoryTotals = {};
+
+    data.forEach(t => {
+        const [y, m, d] = t.date.split('-');
+        if (y !== currentYear) return; // Only process current year for charts
+
+        const amount = parseFloat(t.amount);
+
+        if (t.entryType === 'Debit') {
+            monthlyExpenses[m] += amount;
+            categoryTotals[t.category] = (categoryTotals[t.category] || 0) + amount;
+        } else if (t.entryType === 'Credit') {
+            monthlyIncome[m] += amount;
+        }
+    });
+
+    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const expenseData = Object.values(monthlyExpenses);
+    const incomeData = Object.values(monthlyIncome);
+
+    // Sort categories for breakdown
+    const sortedCategories = Object.entries(categoryTotals).sort((a,b) => b[1] - a[1]).slice(0, 6); // top 6
+    const catLabels = sortedCategories.map(c => c[0]);
+    const catData = sortedCategories.map(c => c[1]);
+
+    // Common Chart Options (Mobile First)
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: { font: { family: 'Inter, sans-serif', size: 10 }, color: '#64748b', boxWidth: 12 }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                titleFont: { family: 'Inter, sans-serif', size: 12 },
+                bodyFont: { family: 'Inter, sans-serif', size: 13 },
+                padding: 10,
+                cornerRadius: 8,
+                displayColors: false
+            }
+        },
+        layout: {
+            padding: {
+                bottom: 20
+            }
+        },
+        scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#94a3b8' } },
+            y: { border: { display: false }, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 }, color: '#94a3b8', maxTicksLimit: 5 } }
+        }
+    };
+
+    // 1. Monthly Expense Trend (Line)
+    const ctxTrend = document.getElementById('monthlyTrendChart').getContext('2d');
+    const gradientTrend = ctxTrend.createLinearGradient(0, 0, 0, 250);
+    gradientTrend.addColorStop(0, 'rgba(239, 68, 68, 0.2)');
+    gradientTrend.addColorStop(1, 'rgba(239, 68, 68, 0)');
+
+    analyticsCharts.monthlyTrend = new Chart(ctxTrend, {
+        type: 'line',
+        data: {
+            labels: monthLabels,
+            datasets: [{
+                label: 'Expenses',
+                data: expenseData,
+                borderColor: '#ef4444',
+                backgroundColor: gradientTrend,
+                borderWidth: 2,
+                pointBackgroundColor: '#ffffff',
+                pointBorderColor: '#ef4444',
+                pointBorderWidth: 2,
+                pointRadius: 3,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            ...commonOptions,
+            plugins: { ...commonOptions.plugins, legend: { display: false } }
+        }
+    });
+
+    // 2. Category Breakdown (Doughnut)
+    const ctxCategory = document.getElementById('categoryBreakdownChart').getContext('2d');
+    const bgColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
+
+    analyticsCharts.categoryBreakdown = new Chart(ctxCategory, {
+        type: 'doughnut',
+        data: {
+            labels: catLabels,
+            datasets: [{
+                data: catData,
+                backgroundColor: bgColors,
+                borderWidth: 0,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%',
+            layout: {
+                padding: {
+                    bottom: 20
+                }
+            },
+            plugins: {
+                legend: { position: 'right', labels: { font: { family: 'Inter, sans-serif', size: 10 }, color: '#64748b', boxWidth: 10, padding: 15 } },
+                tooltip: commonOptions.plugins.tooltip
+            }
+        }
+    });
+
+    // 3. Income vs Expense (Bar)
+    const ctxIncExp = document.getElementById('incomeVsExpenseChart').getContext('2d');
+
+    analyticsCharts.incomeVsExpense = new Chart(ctxIncExp, {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                {
+                    label: 'Income',
+                    data: incomeData,
+                    backgroundColor: '#10b981',
+                    borderRadius: 4,
+                    barPercentage: 0.6,
+                    categoryPercentage: 0.8
+                },
+                {
+                    label: 'Expense',
+                    data: expenseData,
+                    backgroundColor: '#ef4444',
+                    borderRadius: 4,
+                    barPercentage: 0.6,
+                    categoryPercentage: 0.8
+                }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            interaction: { mode: 'index', intersect: false }
+        }
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════

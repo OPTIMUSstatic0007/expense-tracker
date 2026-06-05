@@ -23,6 +23,11 @@ fun Route.transactionRoutes() {
     val backupService = BackupService()
 
     route("/transactions") {
+        get("/all") {
+            val transactions = service.getAllTransactions()
+            call.respond(transactions)
+        }
+
         get {
             val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
             val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 30
