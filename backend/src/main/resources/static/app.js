@@ -292,6 +292,25 @@ function toggleMobileForm(mode = 'create', data = null) {
 // NAVIGATION DRAWER — left-side slide, mobile only
 // ═══════════════════════════════════════════════════════════════════
 
+// Drawer status element refs (resolved lazily to avoid null on load)
+let _drawerStatusEls = null;
+function getDrawerStatusEls() {
+    if (!_drawerStatusEls) {
+        _drawerStatusEls = {
+            totalTxns:   document.getElementById('drawer-total-txns'),
+            dbSize:      document.getElementById('drawer-db-size'),
+            lastBackup:  document.getElementById('drawer-last-backup'),
+            lastExport:  document.getElementById('drawer-last-export'),
+            appVersion:  document.getElementById('drawer-app-version'),
+            syncStatus:  document.getElementById('drawer-sync-status'),
+        };
+    }
+    return _drawerStatusEls;
+}
+
+// Client-side mocked state for values with no backend API
+let lastExportTime = null;
+
 function setupNavDrawer() {
     if (!hamburgerBtn || !navDrawer || !navDrawerScrim) return;
 
@@ -308,6 +327,70 @@ function setupNavDrawer() {
 
     // Scrim tap → close
     navDrawerScrim.addEventListener('click', () => closeNavDrawer());
+
+    // ═══ DATABASE ACTION BUTTONS ═══
+
+    // 1. Create Restore Point — reuses existing /backup/snapshot API
+    const drawerSnapshotBtn = document.getElementById('drawer-snapshot-btn');
+    if (drawerSnapshotBtn) {
+        drawerSnapshotBtn.addEventListener('click', async () => {
+            const textEl  = drawerSnapshotBtn.querySelector('.drawer-action-text');
+            const loader  = drawerSnapshotBtn.querySelector('.drawer-action-loader');
+            const origText = 'Create Restore Point';
+
+            drawerSnapshotBtn.disabled = true;
+            if (textEl) textEl.innerText = 'Creating...';
+            if (loader) loader.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
+                if (response.ok) {
+                    showToast('Restore point created');
+                    updateBackupStatus();
+                    updateDrawerStatus();
+                } else {
+                    showToast('Failed to create restore point', 'error');
+                }
+            } catch (e) {
+                showToast('Network error', 'error');
+            } finally {
+                drawerSnapshotBtn.disabled = false;
+                if (textEl) textEl.innerText = origText;
+                if (loader) loader.classList.add('hidden');
+            }
+        });
+    }
+
+    // 2. Backup Database — reuses existing /backup/database download
+    const drawerBackupBtn = document.getElementById('drawer-backup-btn');
+    if (drawerBackupBtn) {
+        drawerBackupBtn.addEventListener('click', () => {
+            showToast('Preparing database backup...', 'info');
+            window.location.href = `${BACKUP_BASE_URL}/database`;
+            setTimeout(() => {
+                updateBackupStatus();
+                updateDrawerStatus();
+            }, 2000);
+        });
+    }
+
+    // 3. Restore Database — triggers existing file input
+    const drawerRestoreBtn = document.getElementById('drawer-restore-btn');
+    if (drawerRestoreBtn && restoreInput) {
+        drawerRestoreBtn.addEventListener('click', () => {
+            closeNavDrawer();
+            // Small delay lets drawer close animation finish before file picker opens
+            setTimeout(() => restoreInput.click(), 350);
+        });
+    }
+
+    // 4. Cleanup Old Records — placeholder (no backend API)
+    const drawerCleanupBtn = document.getElementById('drawer-cleanup-btn');
+    if (drawerCleanupBtn) {
+        drawerCleanupBtn.addEventListener('click', () => {
+            showToast('Cleanup feature coming soon', 'info');
+        });
+    }
 }
 
 function openNavDrawer() {
@@ -317,6 +400,9 @@ function openNavDrawer() {
     navDrawerScrim.classList.add('is-visible');
     navDrawerScrim.setAttribute('aria-hidden', 'false');
     if (hamburgerBtn) hamburgerBtn.setAttribute('aria-expanded', 'true');
+
+    // Refresh system status every time drawer opens
+    updateDrawerStatus();
 }
 
 function closeNavDrawer() {
@@ -326,6 +412,77 @@ function closeNavDrawer() {
     navDrawerScrim.classList.remove('is-visible');
     navDrawerScrim.setAttribute('aria-hidden', 'true');
     if (hamburgerBtn) hamburgerBtn.setAttribute('aria-expanded', 'false');
+}
+
+/**
+ * Updates the SYSTEM STATUS section in the drawer.
+ * Sources:
+ *   - Total Transactions → client-side `transactions` array length
+ *   - Database Size      → mocked estimate (no backend API)
+ *   - Last Backup        → /backup/status API (existing)
+ *   - Last Export         → client-side tracked timestamp
+ *   - App Version        → hardcoded v1.0
+ *   - Sync Status        → /backup/status API (existing)
+ */
+async function updateDrawerStatus() {
+    const els = getDrawerStatusEls();
+
+    // 1. Total Transactions — from client state
+    if (els.totalTxns) {
+        els.totalTxns.innerText = transactions.length > 0 ? transactions.length.toLocaleString() : '0';
+    }
+
+    // 2. Database Size — estimate based on transaction count (no backend API)
+    if (els.dbSize) {
+        // ~0.5KB per record + 48KB base is a reasonable SQLite estimate
+        const estimateKB = 48 + (transactions.length * 0.5);
+        if (estimateKB >= 1024) {
+            els.dbSize.innerText = `~${(estimateKB / 1024).toFixed(1)} MB`;
+        } else {
+            els.dbSize.innerText = `~${Math.round(estimateKB)} KB`;
+        }
+    }
+
+    // 4. Last Export — client-side tracked
+    if (els.lastExport) {
+        els.lastExport.innerText = lastExportTime || 'Never';
+    }
+
+    // 5. App Version — static
+    if (els.appVersion) {
+        els.appVersion.innerText = 'v1.0';
+    }
+
+    // 3 & 6. Last Backup + Sync Status — from existing /backup/status API
+    try {
+        const response = await fetch(`${BACKUP_BASE_URL}/status`);
+        if (response.ok) {
+            const status = await response.json();
+
+            if (els.lastBackup) {
+                els.lastBackup.innerText = status.lastBackupTime || 'Never';
+            }
+
+            if (els.syncStatus) {
+                els.syncStatus.className = 'drawer-status-value drawer-sync-indicator';
+                if (status.status === 'Synced') {
+                    els.syncStatus.innerText = '● Synced';
+                    els.syncStatus.classList.add('sync-ok');
+                } else if (status.status === 'Pending Sync') {
+                    els.syncStatus.innerText = `● Pending (${status.transactionsSinceLast || 0}/10)`;
+                    els.syncStatus.classList.add('sync-pending');
+                } else {
+                    els.syncStatus.innerText = status.status || 'Unknown';
+                }
+            }
+        }
+    } catch (e) {
+        if (els.lastBackup) els.lastBackup.innerText = 'Unavailable';
+        if (els.syncStatus) {
+            els.syncStatus.className = 'drawer-status-value drawer-sync-indicator sync-error';
+            els.syncStatus.innerText = '● Error';
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -744,6 +901,9 @@ function triggerExport(format, btn) {
     setTimeout(() => {
         window.location.href = `${EXPORT_BASE_URL}/${format}?${new URLSearchParams({ month: filterMonth.value, year: filterYear.value, category: filterCategory.value, search: searchInput.value }).toString()}`;
         setLoading(btn, false, originalText);
+        // Track export timestamp for drawer System Status
+        const now = new Date();
+        lastExportTime = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     }, 800);
 }
 

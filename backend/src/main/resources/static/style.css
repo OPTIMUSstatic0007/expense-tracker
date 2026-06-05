@@ -1145,12 +1145,6 @@ body {
 
     /* ═══════════════════════════════════════════════════════════
        NAVIGATION DRAWER — left-side slide panel
-       Architecture:
-         • position: fixed on the <aside> only
-         • translateX for GPU-accelerated slide
-         • z-index 1100 (above navbar 1000, below modal 2000)
-         • Lightweight scrim at 1099
-         • No body scroll lock — scrim absorbs taps
        ═══════════════════════════════════════════════════════════ */
 
     /* Scrim (dim overlay behind drawer) */
@@ -1202,18 +1196,18 @@ body {
         box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
     }
 
-    /* Drawer Header */
+    /* Drawer Header — compact */
     .nav-drawer-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 18px 20px;
+        padding: 14px 16px;
         border-bottom: 1px solid var(--border-color);
         flex-shrink: 0;
     }
 
     .nav-drawer-brand {
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 700;
         color: var(--text-main);
     }
@@ -1222,8 +1216,8 @@ body {
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 34px;
-        height: 34px;
+        width: 32px;
+        height: 32px;
         border: none;
         background: var(--surface-alt);
         border-radius: 50%;
@@ -1243,12 +1237,12 @@ body {
         flex: 1;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        padding: 8px 0;
+        padding: 4px 0;
     }
 
-    /* Section Groups */
+    /* Section Groups — tighter spacing */
     .nav-drawer-section {
-        padding: 8px 0;
+        padding: 6px 0;
     }
 
     .nav-drawer-section + .nav-drawer-section {
@@ -1258,9 +1252,9 @@ body {
     .nav-drawer-section-title {
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 10px 20px 6px;
-        font-size: 0.65rem;
+        gap: 8px;
+        padding: 8px 16px 4px;
+        font-size: 0.6rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.08em;
@@ -1273,12 +1267,12 @@ body {
         opacity: 0.7;
     }
 
-    /* Drawer Items */
+    /* Drawer Items — compact */
     .nav-drawer-item {
         display: flex;
         align-items: center;
-        padding: 12px 20px 12px 46px;
-        font-size: 0.875rem;
+        padding: 10px 16px 10px 40px;
+        font-size: 0.8125rem;
         font-weight: 500;
         color: var(--text-main);
         cursor: pointer;
@@ -1292,7 +1286,7 @@ body {
         background: var(--surface-alt);
     }
 
-    /* Placeholder indicator — subtle "coming soon" style */
+    /* Placeholder indicator — subtle dot */
     .nav-drawer-item.placeholder-item {
         color: var(--text-muted);
     }
@@ -1308,11 +1302,113 @@ body {
         flex-shrink: 0;
     }
 
-    /* Drawer Footer */
-    .nav-drawer-footer {
-        padding: 16px 20px;
-        border-top: 1px solid var(--border-color);
+    /* ═══ Drawer Action Buttons (DATABASE section) ═══ */
+    .nav-drawer-action-btn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 11px 16px 11px 40px;
+        border: none;
+        background: transparent;
+        font-family: inherit;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-main);
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: background 0.12s ease;
+        text-align: left;
+    }
+
+    .nav-drawer-action-btn svg {
+        flex-shrink: 0;
+        color: var(--text-muted);
+        transition: color 0.12s ease;
+    }
+
+    .nav-drawer-action-btn:active {
+        background: var(--primary-soft);
+    }
+
+    .nav-drawer-action-btn:active svg {
+        color: var(--primary);
+    }
+
+    .nav-drawer-action-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+    .drawer-action-text {
+        flex: 1;
+    }
+
+    /* Danger variant (Cleanup) */
+    .nav-drawer-action-btn.drawer-action-danger svg {
+        color: var(--danger);
+        opacity: 0.6;
+    }
+
+    .nav-drawer-action-btn.drawer-action-danger:active {
+        background: var(--danger-soft);
+    }
+
+    /* Inline loader spinner for drawer buttons */
+    .drawer-action-loader {
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--border-color);
+        border-top: 2px solid var(--primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        flex-shrink: 0;
+    }
+
+    /* ═══ Status Grid (SYSTEM STATUS section) ═══ */
+    .drawer-status-grid {
+        padding: 4px 16px 6px 16px;
+    }
+
+    .drawer-status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 7px 0;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+    }
+
+    .drawer-status-row:last-child {
+        border-bottom: none;
+    }
+
+    .drawer-status-label {
         font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--text-muted);
+    }
+
+    .drawer-status-value {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-main);
+        text-align: right;
+        max-width: 55%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Sync status color states */
+    .drawer-sync-indicator.sync-ok { color: var(--success); }
+    .drawer-sync-indicator.sync-pending { color: var(--warning); }
+    .drawer-sync-indicator.sync-error { color: var(--danger); }
+
+    /* Drawer Footer — compact */
+    .nav-drawer-footer {
+        padding: 12px 16px;
+        border-top: 1px solid var(--border-color);
+        font-size: 0.7rem;
         font-weight: 600;
         color: var(--text-muted);
         text-align: center;
@@ -1320,10 +1416,10 @@ body {
     }
 
     .nav-drawer-version {
-        font-size: 0.65rem;
+        font-size: 0.6rem;
         color: var(--primary);
         background: var(--primary-soft);
-        padding: 1px 7px;
+        padding: 1px 6px;
         border-radius: 6px;
         vertical-align: middle;
         margin-left: 4px;

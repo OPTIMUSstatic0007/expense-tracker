@@ -37,17 +37,64 @@
             </button>
         </div>
         <div class="nav-drawer-body">
-            <!-- DATABASE Section -->
+            <!-- DATABASE Section — functional action buttons -->
             <div class="nav-drawer-section">
                 <div class="nav-drawer-section-title">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
                     Database
                 </div>
-                <div class="nav-drawer-item placeholder-item">Backup Management</div>
-                <div class="nav-drawer-item placeholder-item">Restore Points</div>
-                <div class="nav-drawer-item placeholder-item">Export History</div>
+                <button id="drawer-snapshot-btn" class="nav-drawer-action-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    <span class="drawer-action-text">Create Restore Point</span>
+                    <span class="drawer-action-loader hidden"></span>
+                </button>
+                <button id="drawer-backup-btn" class="nav-drawer-action-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <span class="drawer-action-text">Backup Database</span>
+                </button>
+                <button id="drawer-restore-btn" class="nav-drawer-action-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    <span class="drawer-action-text">Restore Database</span>
+                </button>
+                <button id="drawer-cleanup-btn" class="nav-drawer-action-btn drawer-action-danger">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+                    <span class="drawer-action-text">Cleanup Old Records</span>
+                </button>
             </div>
-            <!-- MAINTENANCE Section -->
+            <!-- SYSTEM STATUS Section — live info display -->
+            <div class="nav-drawer-section">
+                <div class="nav-drawer-section-title">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                    System Status
+                </div>
+                <div class="drawer-status-grid">
+                    <div class="drawer-status-row">
+                        <span class="drawer-status-label">Total Transactions</span>
+                        <span class="drawer-status-value" id="drawer-total-txns">—</span>
+                    </div>
+                    <div class="drawer-status-row">
+                        <span class="drawer-status-label">Database Size</span>
+                        <span class="drawer-status-value" id="drawer-db-size">—</span>
+                    </div>
+                    <div class="drawer-status-row">
+                        <span class="drawer-status-label">Last Backup</span>
+                        <span class="drawer-status-value" id="drawer-last-backup">—</span>
+                    </div>
+                    <div class="drawer-status-row">
+                        <span class="drawer-status-label">Last Export</span>
+                        <span class="drawer-status-value" id="drawer-last-export">—</span>
+                    </div>
+                    <div class="drawer-status-row">
+                        <span class="drawer-status-label">App Version</span>
+                        <span class="drawer-status-value" id="drawer-app-version">v1.0</span>
+                    </div>
+                    <div class="drawer-status-row">
+                        <span class="drawer-status-label">Sync Status</span>
+                        <span class="drawer-status-value drawer-sync-indicator" id="drawer-sync-status">—</span>
+                    </div>
+                </div>
+            </div>
+            <!-- MAINTENANCE Section — placeholders -->
             <div class="nav-drawer-section">
                 <div class="nav-drawer-section-title">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"></path></svg>
@@ -57,17 +104,7 @@
                 <div class="nav-drawer-item placeholder-item">Payment Methods</div>
                 <div class="nav-drawer-item placeholder-item">Recurring Entries</div>
             </div>
-            <!-- SYSTEM STATUS Section -->
-            <div class="nav-drawer-section">
-                <div class="nav-drawer-section-title">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-                    System Status
-                </div>
-                <div class="nav-drawer-item placeholder-item">Server Health</div>
-                <div class="nav-drawer-item placeholder-item">Storage Usage</div>
-                <div class="nav-drawer-item placeholder-item">Sync Status</div>
-            </div>
-            <!-- FUTURE Section -->
+            <!-- FUTURE Section — placeholders -->
             <div class="nav-drawer-section">
                 <div class="nav-drawer-section-title">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
