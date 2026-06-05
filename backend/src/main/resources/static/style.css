@@ -779,7 +779,6 @@ body {
     .mini-value, .stat-value { font-size: 1.25rem; }
 
     .content-layout { grid-column: 1 / -1; grid-template-columns: 1fr; gap: 24px; margin-top: 12px; }
-    .mgmt-section { grid-column: 1 / -1; }
     .form-section { position: static; }
     .input-grid { grid-template-columns: 1fr; gap: 12px; }
     .transaction-form { padding: 16px; }
@@ -1049,11 +1048,8 @@ body {
     .ledger-table td[data-label="Transaction"],
     .ledger-table td[data-label="Actions"] { display: none; }
 
-    /* Admin Section */
-    .mgmt-section { flex-direction: column; align-items: stretch; text-align: center; padding: 24px 16px; gap: 20px; }
-    .mgmt-actions { flex-direction: column; width: 100%; gap: 12px; }
-    .mgmt-actions .btn-outline { width: 100%; justify-content: center; padding: 14px; font-size: 0.9rem; }
-    .backup-status-container { justify-content: center; gap: 12px; }
+    /* Admin Section — hidden on mobile (moved to nav drawer) */
+    .mgmt-section { display: none; }
 
     /* ═══════════════════════════════════════════════════════════
        MOBILE INLINE FORM — replaces modal overlay on ≤768px
@@ -1427,6 +1423,9 @@ body {
     }
 
     /* ═══ End Navigation Drawer ══════════════════════════════ */
+
+    /* Footer — compact on mobile now that mgmt section is hidden */
+    .product-footer { margin-top: 32px; padding: 32px 20px; }
 }
 
 /* Footer Styles */
