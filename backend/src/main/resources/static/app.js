@@ -33,6 +33,12 @@ const mobileBody     = mobileWrapper ? mobileWrapper.querySelector('.mobile-inli
 const mobileClose    = document.getElementById('mobile-form-close');
 const mobileTitle    = document.getElementById('mobile-form-title');
 
+// Navigation Drawer Elements (mobile only)
+const hamburgerBtn     = document.getElementById('hamburger-btn');
+const navDrawer        = document.getElementById('nav-drawer');
+const navDrawerScrim   = document.getElementById('nav-drawer-scrim');
+const navDrawerClose   = document.getElementById('nav-drawer-close');
+
 /** True when the current viewport is mobile (≤768px). Evaluated at call-time. */
 function isMobile() { return window.innerWidth <= 768; }
 
@@ -212,6 +218,9 @@ function setupEventListeners() {
             }
         });
     }
+
+    // Navigation Drawer (mobile)
+    setupNavDrawer();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -277,6 +286,46 @@ function toggleMobileForm(mode = 'create', data = null) {
     } else {
         openMobileForm(mode, data);
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NAVIGATION DRAWER — left-side slide, mobile only
+// ═══════════════════════════════════════════════════════════════════
+
+function setupNavDrawer() {
+    if (!hamburgerBtn || !navDrawer || !navDrawerScrim) return;
+
+    // Hamburger tap → open drawer
+    hamburgerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openNavDrawer();
+    });
+
+    // Close button inside drawer
+    if (navDrawerClose) {
+        navDrawerClose.addEventListener('click', () => closeNavDrawer());
+    }
+
+    // Scrim tap → close
+    navDrawerScrim.addEventListener('click', () => closeNavDrawer());
+}
+
+function openNavDrawer() {
+    if (!navDrawer || !navDrawerScrim) return;
+    navDrawer.classList.add('is-open');
+    navDrawer.setAttribute('aria-hidden', 'false');
+    navDrawerScrim.classList.add('is-visible');
+    navDrawerScrim.setAttribute('aria-hidden', 'false');
+    if (hamburgerBtn) hamburgerBtn.setAttribute('aria-expanded', 'true');
+}
+
+function closeNavDrawer() {
+    if (!navDrawer || !navDrawerScrim) return;
+    navDrawer.classList.remove('is-open');
+    navDrawer.setAttribute('aria-hidden', 'true');
+    navDrawerScrim.classList.remove('is-visible');
+    navDrawerScrim.setAttribute('aria-hidden', 'true');
+    if (hamburgerBtn) hamburgerBtn.setAttribute('aria-expanded', 'false');
 }
 
 // ═══════════════════════════════════════════════════════════════════
