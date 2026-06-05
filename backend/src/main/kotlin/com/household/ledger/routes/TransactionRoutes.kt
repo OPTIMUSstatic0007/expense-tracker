@@ -236,4 +236,20 @@ fun Route.transactionRoutes() {
             }
         }
     }
+
+    // ═══ DB CENTER — read-only stats for mobile panel ═══
+    route("/db") {
+        get("/stats") {
+            val totalCount = service.getTotalCount()
+            val dbFileSize = File("backend/data/ledger.db").let { if (it.exists()) it.length() else 0L }
+            val backupStatus = backupService.getBackupStatus()
+            call.respond(mapOf(
+                "totalTransactions" to totalCount.toString(),
+                "databaseSizeBytes" to dbFileSize.toString(),
+                "lastBackupTime" to (backupStatus["lastBackupTime"] ?: "Never"),
+                "syncStatus" to (backupStatus["status"] ?: "Unknown"),
+                "pendingMutations" to (backupStatus["transactionsSinceLast"] ?: "0")
+            ))
+        }
+    }
 }

@@ -297,10 +297,6 @@ let _drawerStatusEls = null;
 function getDrawerStatusEls() {
     if (!_drawerStatusEls) {
         _drawerStatusEls = {
-            totalTxns:   document.getElementById('drawer-total-txns'),
-            dbSize:      document.getElementById('drawer-db-size'),
-            lastBackup:  document.getElementById('drawer-last-backup'),
-            lastExport:  document.getElementById('drawer-last-export'),
             appVersion:  document.getElementById('drawer-app-version'),
             syncStatus:  document.getElementById('drawer-sync-status'),
         };
@@ -328,13 +324,13 @@ function setupNavDrawer() {
     // Scrim tap → close
     navDrawerScrim.addEventListener('click', () => closeNavDrawer());
 
-    // ═══ DATABASE ACTION BUTTONS ═══
+    // ═══ DATABASE ACTION BUTTONS (now inside DB Center panel) ═══
 
     // 1. Create Restore Point — reuses existing /backup/snapshot API
     const drawerSnapshotBtn = document.getElementById('drawer-snapshot-btn');
     if (drawerSnapshotBtn) {
         drawerSnapshotBtn.addEventListener('click', async () => {
-            const textEl  = drawerSnapshotBtn.querySelector('.drawer-action-text');
+            const textEl  = drawerSnapshotBtn.querySelector('.db-center-action-text');
             const loader  = drawerSnapshotBtn.querySelector('.drawer-action-loader');
             const origText = 'Create Restore Point';
 
@@ -347,7 +343,7 @@ function setupNavDrawer() {
                 if (response.ok) {
                     showToast('Restore point created');
                     updateBackupStatus();
-                    updateDrawerStatus();
+                    fetchDbStats();
                 } else {
                     showToast('Failed to create restore point', 'error');
                 }
@@ -369,7 +365,7 @@ function setupNavDrawer() {
             window.location.href = `${BACKUP_BASE_URL}/database`;
             setTimeout(() => {
                 updateBackupStatus();
-                updateDrawerStatus();
+                fetchDbStats();
             }, 2000);
         });
     }
@@ -378,8 +374,8 @@ function setupNavDrawer() {
     const drawerRestoreBtn = document.getElementById('drawer-restore-btn');
     if (drawerRestoreBtn && restoreInput) {
         drawerRestoreBtn.addEventListener('click', () => {
-            closeNavDrawer();
-            // Small delay lets drawer close animation finish before file picker opens
+            closeDbCenter();
+            // Small delay lets panel close animation finish before file picker opens
             setTimeout(() => restoreInput.click(), 350);
         });
     }
@@ -391,6 +387,9 @@ function setupNavDrawer() {
             showToast('Cleanup feature coming soon', 'info');
         });
     }
+
+    // Wire up DB Center panel navigation
+    setupDbCenterPanel();
 }
 
 function openNavDrawer() {
@@ -415,53 +414,22 @@ function closeNavDrawer() {
 }
 
 /**
- * Updates the SYSTEM STATUS section in the drawer.
- * Sources:
- *   - Total Transactions → client-side `transactions` array length
- *   - Database Size      → mocked estimate (no backend API)
- *   - Last Backup        → /backup/status API (existing)
- *   - Last Export         → client-side tracked timestamp
- *   - App Version        → hardcoded v1.0
- *   - Sync Status        → /backup/status API (existing)
+ * Updates the SYSTEM section in the drawer (sync status only).
+ * Full metrics are now in the DB Center panel via fetchDbStats().
  */
 async function updateDrawerStatus() {
     const els = getDrawerStatusEls();
 
-    // 1. Total Transactions — from client state
-    if (els.totalTxns) {
-        els.totalTxns.innerText = transactions.length > 0 ? transactions.length.toLocaleString() : '0';
-    }
-
-    // 2. Database Size — estimate based on transaction count (no backend API)
-    if (els.dbSize) {
-        // ~0.5KB per record + 48KB base is a reasonable SQLite estimate
-        const estimateKB = 48 + (transactions.length * 0.5);
-        if (estimateKB >= 1024) {
-            els.dbSize.innerText = `~${(estimateKB / 1024).toFixed(1)} MB`;
-        } else {
-            els.dbSize.innerText = `~${Math.round(estimateKB)} KB`;
-        }
-    }
-
-    // 4. Last Export — client-side tracked
-    if (els.lastExport) {
-        els.lastExport.innerText = lastExportTime || 'Never';
-    }
-
-    // 5. App Version — static
+    // App Version — static
     if (els.appVersion) {
         els.appVersion.innerText = 'v1.0';
     }
 
-    // 3 & 6. Last Backup + Sync Status — from existing /backup/status API
+    // Sync Status — from existing /backup/status API
     try {
         const response = await fetch(`${BACKUP_BASE_URL}/status`);
         if (response.ok) {
             const status = await response.json();
-
-            if (els.lastBackup) {
-                els.lastBackup.innerText = status.lastBackupTime || 'Never';
-            }
 
             if (els.syncStatus) {
                 els.syncStatus.className = 'drawer-status-value drawer-sync-indicator';
@@ -477,7 +445,6 @@ async function updateDrawerStatus() {
             }
         }
     } catch (e) {
-        if (els.lastBackup) els.lastBackup.innerText = 'Unavailable';
         if (els.syncStatus) {
             els.syncStatus.className = 'drawer-status-value drawer-sync-indicator sync-error';
             els.syncStatus.innerText = '● Error';
@@ -934,4 +901,131 @@ function escapeHtml(t) {
     const d = document.createElement('div');
     d.textContent = t;
     return d.innerHTML;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DB CENTER PANEL — isolated mobile slide panel, no global state touch
+// ═══════════════════════════════════════════════════════════════════
+
+function setupDbCenterPanel() {
+    const link     = document.getElementById('drawer-db-center-link');
+    const panel    = document.getElementById('db-center-panel');
+    const scrim    = document.getElementById('db-center-scrim');
+    const closeBtn = document.getElementById('db-center-close');
+    if (!link || !panel) return;
+
+    // "Database Center →" link in drawer
+    link.addEventListener('click', () => {
+        closeNavDrawer();
+        // Wait for drawer close animation before opening panel
+        setTimeout(() => openDbCenter(), 320);
+    });
+
+    // Close button (back arrow)
+    if (closeBtn) closeBtn.addEventListener('click', () => closeDbCenter());
+
+    // Scrim tap closes panel
+    if (scrim) scrim.addEventListener('click', () => closeDbCenter());
+}
+
+function openDbCenter() {
+    const panel = document.getElementById('db-center-panel');
+    const scrim = document.getElementById('db-center-scrim');
+    if (!panel) return;
+
+    panel.classList.add('is-open');
+    panel.setAttribute('aria-hidden', 'false');
+    if (scrim) {
+        scrim.classList.add('is-visible');
+        scrim.setAttribute('aria-hidden', 'false');
+    }
+
+    // Fetch live stats every time panel opens
+    fetchDbStats();
+}
+
+function closeDbCenter() {
+    const panel = document.getElementById('db-center-panel');
+    const scrim = document.getElementById('db-center-scrim');
+    if (!panel) return;
+
+    panel.classList.remove('is-open');
+    panel.setAttribute('aria-hidden', 'true');
+    if (scrim) {
+        scrim.classList.remove('is-visible');
+        scrim.setAttribute('aria-hidden', 'true');
+    }
+}
+
+/**
+ * Fetches real database stats from GET /db/stats.
+ * Populates the DB Center panel metrics with backend-sourced data.
+ * Falls back gracefully if endpoint is unavailable.
+ */
+async function fetchDbStats() {
+    const els = {
+        totalTxns:  document.getElementById('dbcenter-total-txns'),
+        dbSize:     document.getElementById('dbcenter-db-size'),
+        lastBackup: document.getElementById('dbcenter-last-backup'),
+        lastExport: document.getElementById('dbcenter-last-export'),
+        syncStatus: document.getElementById('dbcenter-sync-status'),
+    };
+
+    try {
+        const response = await fetch('/db/stats');
+        if (response.ok) {
+            const stats = await response.json();
+
+            // Total Transactions — REAL backend count
+            if (els.totalTxns) {
+                const count = parseInt(stats.totalTransactions, 10) || 0;
+                els.totalTxns.innerText = count.toLocaleString();
+            }
+
+            // Database Size — REAL file size from backend
+            if (els.dbSize) {
+                const bytes = parseInt(stats.databaseSizeBytes, 10) || 0;
+                if (bytes >= 1048576) {
+                    els.dbSize.innerText = `${(bytes / 1048576).toFixed(1)} MB`;
+                } else if (bytes >= 1024) {
+                    els.dbSize.innerText = `${(bytes / 1024).toFixed(0)} KB`;
+                } else {
+                    els.dbSize.innerText = `${bytes} B`;
+                }
+            }
+
+            // Last Backup
+            if (els.lastBackup) {
+                els.lastBackup.innerText = stats.lastBackupTime || 'Never';
+            }
+
+            // Sync Status
+            if (els.syncStatus) {
+                els.syncStatus.className = 'db-center-metric-value db-center-sync-badge';
+                if (stats.syncStatus === 'Synced') {
+                    els.syncStatus.innerText = '● Synced';
+                    els.syncStatus.classList.add('sync-ok');
+                } else if (stats.syncStatus === 'Pending Sync') {
+                    els.syncStatus.innerText = `● Pending (${stats.pendingMutations || 0}/10)`;
+                    els.syncStatus.classList.add('sync-pending');
+                } else {
+                    els.syncStatus.innerText = stats.syncStatus || 'Unknown';
+                }
+            }
+        }
+    } catch (e) {
+        // Graceful fallback — panel still shows but with placeholder data
+        if (els.totalTxns) els.totalTxns.innerText = 'Unavailable';
+        if (els.dbSize) els.dbSize.innerText = 'Unavailable';
+        if (els.lastBackup) els.lastBackup.innerText = 'Unavailable';
+        if (els.syncStatus) {
+            els.syncStatus.className = 'db-center-metric-value db-center-sync-badge sync-error';
+            els.syncStatus.innerText = '● Error';
+        }
+    }
+
+    // Last Export — client-side tracked (no backend API for this)
+    if (els.lastExport) {
+        els.lastExport.innerText = lastExportTime || 'Never';
+    }
 }

@@ -76,6 +76,10 @@ body {
 .nav-drawer-scrim { display: none; }
 .nav-drawer { display: none; }
 
+/* DB Center Panel — hidden on desktop */
+.db-center-scrim { display: none; }
+.db-center-panel { display: none; }
+
 .nav-container {
     width: 100%;
     max-width: var(--container-max-width);
@@ -1423,6 +1427,285 @@ body {
     }
 
     /* ═══ End Navigation Drawer ══════════════════════════════ */
+
+    /* ═══════════════════════════════════════════════════════════
+       DRAWER NAVIGATION LINK — "Database Center →" button
+       ═══════════════════════════════════════════════════════════ */
+    .nav-drawer-link-btn {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        border: none;
+        background: transparent;
+        font-family: inherit;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--primary);
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: background 0.12s ease;
+        text-align: left;
+    }
+
+    .nav-drawer-link-btn svg {
+        color: var(--text-muted);
+        flex-shrink: 0;
+        transition: transform 0.2s ease;
+    }
+
+    .nav-drawer-link-btn:active {
+        background: var(--primary-soft);
+    }
+
+    .nav-drawer-link-btn:active svg {
+        transform: translateX(2px);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       DB CENTER PANEL — full-height slide-in from right
+       ═══════════════════════════════════════════════════════════ */
+
+    /* Scrim (dim overlay behind panel) */
+    .db-center-scrim {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(15, 23, 42, 0.45);
+        z-index: 1199;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .db-center-scrim.is-visible {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* Panel — slides from right edge */
+    .db-center-panel {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        max-width: 100vw;
+        background: var(--bg-color);
+        z-index: 1200;
+        transform: translateX(100%);
+        transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+        -webkit-transform: translateX(100%);
+        -webkit-transition: -webkit-transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+        will-change: transform;
+        box-shadow: none;
+        overflow: hidden;
+    }
+
+    .db-center-panel.is-open {
+        transform: translateX(0);
+        -webkit-transform: translateX(0);
+        box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+    }
+
+    /* Panel Header */
+    .db-center-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        background: var(--surface-color);
+        border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0;
+    }
+
+    .db-center-header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .db-center-header h2 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-main);
+    }
+
+    .db-center-back-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border: none;
+        background: var(--surface-alt);
+        border-radius: 50%;
+        color: var(--text-muted);
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .db-center-back-btn:active {
+        background: #e2e8f0;
+        color: var(--text-main);
+    }
+
+    /* Panel Body — scrollable */
+    .db-center-body {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 20px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    /* Card Sections */
+    .db-center-card {
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-lg);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+    }
+
+    .db-center-card-title {
+        padding: 14px 16px 8px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+    }
+
+    /* Action Buttons inside panel */
+    .db-center-action-btn {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        width: 100%;
+        padding: 14px 16px;
+        border: none;
+        border-top: 1px solid rgba(226, 232, 240, 0.5);
+        background: transparent;
+        font-family: inherit;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: background 0.12s ease;
+        text-align: left;
+    }
+
+    .db-center-action-btn:first-of-type {
+        border-top: none;
+    }
+
+    .db-center-action-btn:active {
+        background: var(--primary-soft);
+    }
+
+    .db-center-action-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+    .db-center-action-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: var(--primary-soft);
+        flex-shrink: 0;
+    }
+
+    .db-center-action-icon svg {
+        color: var(--primary);
+    }
+
+    .db-center-action-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .db-center-action-text {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-main);
+    }
+
+    .db-center-action-desc {
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: var(--text-muted);
+    }
+
+    /* Danger variant (Cleanup) */
+    .db-center-action-danger .db-center-action-icon {
+        background: var(--danger-soft);
+    }
+
+    .db-center-action-danger .db-center-action-icon svg {
+        color: var(--danger);
+    }
+
+    .db-center-action-danger:active {
+        background: var(--danger-soft);
+    }
+
+    /* Metrics Grid */
+    .db-center-metrics-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+    }
+
+    .db-center-metric {
+        padding: 14px 16px;
+        border-top: 1px solid rgba(226, 232, 240, 0.5);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .db-center-metric:nth-child(odd) {
+        border-right: 1px solid rgba(226, 232, 240, 0.5);
+    }
+
+    .db-center-metric-full {
+        grid-column: span 2;
+    }
+
+    .db-center-metric-label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+    }
+
+    .db-center-metric-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-main);
+    }
+
+    /* Sync badge colors */
+    .db-center-sync-badge.sync-ok { color: var(--success); }
+    .db-center-sync-badge.sync-pending { color: var(--warning); }
+    .db-center-sync-badge.sync-error { color: var(--danger); }
+
+    /* ═══ End DB Center Panel ══════════════════════════════ */
 
     /* Footer — compact on mobile now that mgmt section is hidden */
     .product-footer { margin-top: 32px; padding: 32px 20px; }
