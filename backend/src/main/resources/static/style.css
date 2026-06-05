@@ -1944,7 +1944,7 @@ body {
         border: 1px solid var(--border-color);
         border-radius: var(--border-radius-lg);
         box-shadow: var(--shadow-sm);
-        overflow: visible; /* changed from hidden to prevent clipping of chart components */
+        overflow: hidden;
     }
 
     .db-center-card-title {

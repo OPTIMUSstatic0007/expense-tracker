@@ -1194,7 +1194,12 @@ function renderCharts(data) {
         },
         options: {
             ...commonOptions,
-            interaction: { mode: 'index', intersect: false }
+            interaction: { mode: 'index', intersect: false },
+            layout: {
+                padding: {
+                    bottom: 20
+                }
+            }
         }
     });
 }
