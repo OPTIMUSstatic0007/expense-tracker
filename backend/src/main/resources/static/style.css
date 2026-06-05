@@ -681,6 +681,7 @@ body {
 
 /* Floating Action Button */
 .fab-add {
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease, box-shadow 0.3s ease;
     position: fixed;
     bottom: 32px;
     right: 32px;
@@ -711,6 +712,7 @@ body {
 
 @media (max-width: 768px) {
     .fab-add {
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease, box-shadow 0.3s ease;
         bottom: 24px;
         right: 24px;
         width: 56px;
@@ -1115,6 +1117,374 @@ body {
         background: var(--danger);
         box-shadow: 0 4px 16px rgba(239, 68, 68, 0.45);
         transform: rotate(45deg) scale(1.0);
+    }
+
+
+
+    /* --- NEW MOBILE FORM STYLES --- */
+
+    /* Reorganize the grid just for the mobile inline wrapper */
+
+    .mobile-inline-wrapper .transaction-form {
+
+        padding: 16px;
+
+    }
+
+    /* Show mobile-only elements inside the inline wrapper */
+
+    .mobile-inline-wrapper .mobile-only-header,
+
+    .mobile-inline-wrapper .mobile-only-btn,
+
+    .mobile-inline-wrapper .mobile-only-currency {
+
+        display: flex !important;
+
+    }
+
+    /* Hide desktop-specific fields from the main grid inside the wrapper */
+
+    .mobile-inline-wrapper #type-field-container {
+
+        display: none;
+
+    }
+
+    .mobile-inline-wrapper .mobile-only-header {
+
+        flex-direction: column;
+
+        align-items: center;
+
+        margin-bottom: 24px;
+
+    }
+
+    .mobile-inline-wrapper .segmented-toggle {
+
+        display: flex;
+
+        background: #f1f5f9;
+
+        border-radius: 20px;
+
+        padding: 4px;
+
+        margin-bottom: 24px;
+
+        width: 100%;
+
+        max-width: 240px;
+
+    }
+
+    .mobile-inline-wrapper .toggle-btn {
+
+        flex: 1;
+
+        padding: 8px 16px;
+
+        border: none;
+
+        background: transparent;
+
+        border-radius: 16px;
+
+        font-size: 0.875rem;
+
+        font-weight: 600;
+
+        color: var(--text-muted);
+
+        transition: all 0.2s ease;
+
+    }
+
+    .mobile-inline-wrapper .toggle-btn.active {
+
+        background: white;
+
+        color: var(--primary);
+
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+
+    }
+
+    .mobile-inline-wrapper #amount-label {
+
+        display: none;
+
+    }
+
+    .mobile-inline-wrapper #amount-field-container {
+
+        position: absolute;
+
+        top: 85px;
+
+        left: 0;
+
+        right: 0;
+
+        display: flex;
+
+        justify-content: center;
+
+    }
+
+    .mobile-inline-wrapper .amount-input-wrapper {
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+    }
+
+    .mobile-inline-wrapper .currency-symbol {
+
+        font-size: 2rem;
+
+        font-weight: 600;
+
+        color: var(--text-main);
+
+        margin-right: 8px;
+
+    }
+
+    .mobile-inline-wrapper #amount {
+
+        font-size: 2.5rem;
+
+        font-weight: 700;
+
+        color: var(--text-main);
+
+        width: 140px;
+
+        text-align: center;
+
+        border: none;
+
+        padding: 0;
+
+        background: transparent;
+
+        height: auto;
+
+    }
+
+    .mobile-inline-wrapper #amount:focus {
+
+        outline: none;
+
+        box-shadow: none;
+
+    }
+
+    .mobile-inline-wrapper .quick-chips {
+
+        display: flex;
+
+        gap: 8px;
+
+        justify-content: center;
+
+        flex-wrap: wrap;
+
+        margin-top: 60px;
+
+    }
+
+    .mobile-inline-wrapper .chip {
+
+        padding: 6px 12px;
+
+        border: 1px solid var(--border-color);
+
+        border-radius: 16px;
+
+        background: transparent;
+
+        font-size: 0.8125rem;
+
+        font-weight: 500;
+
+        color: var(--text-main);
+
+        transition: background 0.2s;
+
+    }
+
+    .mobile-inline-wrapper .chip:active {
+
+        background: #f1f5f9;
+
+    }
+
+    /* Reorganize the grid */
+
+    .mobile-inline-wrapper .form-main-fields {
+
+        display: grid;
+
+        grid-template-columns: 1fr 1fr;
+
+        gap: 12px;
+
+        margin-bottom: 16px;
+
+    }
+
+    .mobile-inline-wrapper .form-main-fields > .field {
+
+        margin-bottom: 0;
+
+    }
+
+    .mobile-inline-wrapper #category-field-container {
+
+        grid-column: 1 / 2;
+
+    }
+
+    .mobile-inline-wrapper .form-main-fields > .field:first-child {
+
+        grid-column: 2 / 3;
+
+        grid-row: 1;
+
+    }
+
+    .mobile-inline-wrapper .collapsible-section-wrapper {
+
+        grid-column: 1 / -1;
+
+        border: 1px solid var(--border-color);
+
+        border-radius: var(--border-radius-md);
+
+        overflow: hidden;
+
+        margin-top: 8px;
+
+    }
+
+    .mobile-inline-wrapper .collapsible-header {
+
+        justify-content: space-between;
+
+        align-items: center;
+
+        width: 100%;
+
+        padding: 12px 16px;
+
+        background: #f8fafc;
+
+        border: none;
+
+        font-size: 0.875rem;
+
+        font-weight: 600;
+
+        color: var(--text-main);
+
+    }
+
+    .mobile-inline-wrapper .chevron-icon {
+
+        transition: transform 0.3s ease;
+
+    }
+
+    .mobile-inline-wrapper .collapsible-header.open .chevron-icon {
+
+        transform: rotate(180deg);
+
+    }
+
+    .mobile-inline-wrapper .collapsible-content {
+
+        max-height: 0;
+
+        overflow: hidden;
+
+        transition: max-height 0.3s ease;
+
+        background: white;
+
+    }
+
+    .mobile-inline-wrapper .collapsible-header.open + .collapsible-content {
+
+        max-height: 400px;
+
+    }
+
+    .mobile-inline-wrapper .details-inner-grid {
+
+        display: grid !important;
+
+        grid-template-columns: 1fr;
+
+        gap: 12px;
+
+        padding: 16px;
+
+    }
+
+    .mobile-inline-wrapper .form-actions-wrapper {
+
+        display: flex;
+
+        gap: 12px;
+
+        position: sticky;
+
+        bottom: 0;
+
+        background: var(--surface-color);
+
+        padding: 12px 0 0 0;
+
+        border-top: 1px solid var(--border-color);
+
+        margin-top: 16px;
+
+    }
+
+    .mobile-inline-wrapper .btn-secondary {
+
+        padding: 14px;
+
+        flex: 1;
+
+        background: white;
+
+        border: 1px solid var(--border-color);
+
+        border-radius: var(--border-radius-md);
+
+        font-weight: 600;
+
+        color: var(--text-main);
+
+    }
+
+    .mobile-inline-wrapper .btn-primary {
+
+        flex: 2;
+
+        position: relative;
+
+        bottom: auto;
+
+        box-shadow: none;
+
     }
 
     /* ═══ End Mobile Inline Form ══════════════════════════════ */
@@ -1752,4 +2122,11 @@ body {
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+}
+
+/* Fix for FAB overlap with mobile form */
+@media (max-width: 768px) {
+    .mobile-inline-wrapper.is-open {
+        padding-bottom: 80px; /* Leave space for FAB */
+    }
 }

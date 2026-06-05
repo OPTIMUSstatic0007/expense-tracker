@@ -399,13 +399,9 @@
                     </button>
                 </div>
                 <form id="exp-form" class="transaction-form" novalidate>
-                    <div class="input-grid">
-                        <div class="field">
-                            <label for="date">Date</label>
-                            <input type="date" id="date" required>
-                            <span class="error-msg" id="date-error"></span>
-                        </div>
-                        <div class="field">
+                    <div class="form-header-section">
+                        <!-- Hidden select to keep existing JS logic intact -->
+                        <div class="field hidden-field" style="display: none;">
                             <label for="type">Entry Type</label>
                             <select id="type" required>
                                 <option value="Debit">Expense (-)</option>
@@ -413,47 +409,85 @@
                             </select>
                             <span class="error-msg" id="type-error"></span>
                         </div>
-                        <div class="field">
-                            <label for="amount">Amount (₹)</label>
-                            <input type="number" id="amount" step="0.01" min="0.01" placeholder="0.00" required>
-                            <span class="error-msg" id="amount-error"></span>
+
+                        <div class="segmented-toggle" id="type-toggle">
+                            <button type="button" class="toggle-btn active" data-value="Debit">Expense</button>
+                            <button type="button" class="toggle-btn" data-value="Credit">Income</button>
                         </div>
-                        <div class="field">
-                            <label for="category">Category</label>
-                            <select id="category" required>
-                                <option value="" disabled selected>Select Category</option>
-                                <option value="Groceries">Groceries</option>
-                                <option value="Electricity">Electricity</option>
-                                <option value="Water">Water</option>
-                                <option value="Gas">Gas</option>
-                                <option value="Maintenance">Maintenance</option>
-                                <option value="Salary">Salary</option>
-                                <option value="Deposit">Deposit</option>
-                                <option value="Medical">Medical</option>
-                                <option value="Rent">Rent</option>
-                                <option value="Miscellaneous">Miscellaneous</option>
-                            </select>
-                            <span class="error-msg" id="category-error"></span>
+
+                        <div class="amount-wrapper">
+                            <span class="currency-symbol">₹</span>
+                            <input type="number" id="amount" step="0.01" min="0.01" placeholder="0" required>
                         </div>
-                        <div class="field">
-                            <label for="source">Expense Type</label>
-                            <input type="text" id="source" placeholder="e.g. Cash, UPI" required>
-                            <span class="error-msg" id="source-error"></span>
-                        </div>
-                        <div class="field">
-                            <label for="person">Paid To / From</label>
-                            <input type="text" id="person" placeholder="Name">
-                            <span class="error-msg" id="person-error"></span>
+                        <span class="error-msg" id="amount-error"></span>
+
+                        <div class="quick-chips" id="quick-amount-chips">
+                            <button type="button" class="chip" data-amount="100">+100</button>
+                            <button type="button" class="chip" data-amount="500">+500</button>
+                            <button type="button" class="chip" data-amount="1000">+1k</button>
+                            <button type="button" class="chip" data-amount="2000">+2k</button>
                         </div>
                     </div>
-                    <div class="field notes-field">
-                        <label for="notes">Notes / Reference</label>
-                        <textarea id="notes" rows="2" placeholder="Reference details..."></textarea>
+
+                    <div class="input-grid compact-grid">
+                        <div class="field-group-row">
+                            <div class="field flex-1">
+                                <label for="category">Category</label>
+                                <select id="category" required>
+                                    <option value="" disabled selected>Select Category</option>
+                                    <option value="Groceries">Groceries</option>
+                                    <option value="Electricity">Electricity</option>
+                                    <option value="Water">Water</option>
+                                    <option value="Gas">Gas</option>
+                                    <option value="Maintenance">Maintenance</option>
+                                    <option value="Salary">Salary</option>
+                                    <option value="Deposit">Deposit</option>
+                                    <option value="Medical">Medical</option>
+                                    <option value="Rent">Rent</option>
+                                    <option value="Miscellaneous">Miscellaneous</option>
+                                </select>
+                                <span class="error-msg" id="category-error"></span>
+                            </div>
+                            <div class="field flex-1">
+                                <label for="date">Date</label>
+                                <input type="date" id="date" required>
+                                <span class="error-msg" id="date-error"></span>
+                            </div>
+                        </div>
                     </div>
-                    <button type="submit" id="save-btn" class="btn-primary">
-                        <span id="save-btn-text">Save to Ledger</span>
-                        <span class="btn-loader hidden"></span>
-                    </button>
+
+                    <div class="collapsible-section">
+                        <button type="button" class="collapsible-header" id="details-toggle">
+                            <span>Additional Details</span>
+                            <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="collapsible-content" id="details-content">
+                            <div class="input-grid">
+                                <div class="field">
+                                    <label for="source">Expense Type</label>
+                                    <input type="text" id="source" placeholder="e.g. Cash, UPI" required>
+                                    <span class="error-msg" id="source-error"></span>
+                                </div>
+                                <div class="field">
+                                    <label for="person">Paid To / From</label>
+                                    <input type="text" id="person" placeholder="Name">
+                                    <span class="error-msg" id="person-error"></span>
+                                </div>
+                            </div>
+                            <div class="field notes-field">
+                                <label for="notes">Notes / Reference</label>
+                                <textarea id="notes" rows="2" placeholder="Reference details..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions sticky-actions">
+                        <button type="button" class="btn-secondary" id="cancel-btn">Cancel</button>
+                        <button type="submit" id="save-btn" class="btn-primary">
+                            <span id="save-btn-text">Save to Ledger</span>
+                            <span class="btn-loader hidden"></span>
+                        </button>
+                    </div>
                 </form>
             </section>
         </div>
