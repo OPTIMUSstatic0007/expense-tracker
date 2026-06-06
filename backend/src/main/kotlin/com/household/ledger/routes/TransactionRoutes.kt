@@ -4,6 +4,7 @@ import com.household.ledger.database.TransactionService
 import com.household.ledger.models.Transaction
 import com.household.ledger.service.BackupService
 import com.household.ledger.service.ExportService
+import com.household.ledger.storage.StoragePaths
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
@@ -246,7 +247,7 @@ fun Route.transactionRoutes() {
     route("/db") {
         get("/stats") {
             val totalCount = service.getTotalCount()
-            val dbFileSize = File("backend/data/ledger.db").let { if (it.exists()) it.length() else 0L }
+            val dbFileSize = StoragePaths.databaseFile.let { if (it.exists()) it.length() else 0L }
             val backupStatus = backupService.getBackupStatus()
             call.respond(mapOf(
                 "totalTransactions" to totalCount.toString(),

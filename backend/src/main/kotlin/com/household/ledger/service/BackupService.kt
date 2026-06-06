@@ -1,14 +1,19 @@
 package com.household.ledger.service
 
+import com.household.ledger.database.DatabaseFactory
+import com.household.ledger.database.TransactionService
 import com.household.ledger.models.Transaction
+import com.household.ledger.storage.StoragePaths
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.sql.DriverManager
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Serializable
 data class BackupMeta(
@@ -35,31 +40,20 @@ class BackupService {
     private val logger = LoggerFactory.getLogger(BackupService::class.java)
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
 
-    // Configuration
     private val MAX_AUTO_BACKUPS = 10
+    private val MAX_MANUAL_RESTORE_POINTS = 5
+    private val backupTimestampFormatter = DateTimeFormatter.ofPattern("yyyy_MM_dd_HH_mm_ss")
 
     init {
-        logger.info("Smart Backup Engine initialized | Threshold: 10 | Retention Limit: 10")
+        logger.info("Smart Backup Engine initialized | Threshold: 10 | Auto Retention: 10 | Restore Point Retention: 5")
     }
 
-    /**
-     * Aligned with DatabaseFactory.kt path resolution.
-     */
     private val dbFile: File by lazy {
-        File("backend/data/ledger.db")
+        StoragePaths.databaseFile
     }
 
-    /**
-     * Aligned with DatabaseFactory.kt path resolution.
-     * Backups are stored in backend/data/backups/ relative to the working directory.
-     */
     private val baseBackupDir: File by lazy {
-        val dir = File("backend/data/backups")
-        if (!dir.exists()) {
-            val created = dir.mkdirs()
-            logger.info("Created backup directory: ${dir.absolutePath} (Success: $created)")
-        }
-        dir
+        StoragePaths.backupsDir
     }
 
     private val metaFile: File by lazy { File(baseBackupDir, "backup_meta.json") }
@@ -70,10 +64,7 @@ class BackupService {
     private fun loadMeta(): BackupMeta = try {
         if (metaFile.exists()) {
             json.decodeFromString<BackupMeta>(metaFile.readText()).also {
-                // Sync counts from history on load for accuracy
-                val history = loadHistory()
-                it.autoBackupCount = history.count { h -> h.type == "auto" }
-                it.manualRestorePointCount = history.count { h -> h.type == "manual" }
+                syncMetaCounts(it, reconcileHistoryWithFilesystem(loadHistory()))
             }
         } else BackupMeta()
     } catch (e: Exception) { BackupMeta() }
@@ -115,7 +106,6 @@ class BackupService {
         if (meta.pendingMutationCount >= 10) {
             logger.info("Smart Backup: Threshold (10) reached. Triggering physical snapshot...")
             if (performPhysicalBackup("auto", transactions)) {
-                // Refresh meta to get updated counts and reset pending
                 val updatedMeta = loadMeta()
                 updatedMeta.pendingMutationCount = 0
                 updatedMeta.lastBackupTime = now
@@ -139,10 +129,8 @@ class BackupService {
                 meta.isDirty = false
             }
             meta.lastBackupTime = now
-            // Update counts in meta
             val history = loadHistory()
-            meta.autoBackupCount = history.count { it.type == "auto" }
-            meta.manualRestorePointCount = history.count { it.type == "manual" }
+            syncMetaCounts(meta, reconcileHistoryWithFilesystem(history))
             
             saveMeta(meta)
             return true
@@ -159,6 +147,7 @@ class BackupService {
         }
         val fileName = "${prefix}_$timestamp.db"
         val targetFile = File(baseBackupDir, fileName)
+        var createdTarget = false
 
         logger.info("Initiating snapshot | Type: $type | Target: ${targetFile.absolutePath}")
 
@@ -167,8 +156,13 @@ class BackupService {
                 logger.error("Snapshot failed: Source database not found at ${dbFile.absolutePath}")
                 return false
             }
+            if (targetFile.exists()) {
+                logger.error("Snapshot failed: Target already exists at ${targetFile.absolutePath}")
+                return false
+            }
 
             dbFile.copyTo(targetFile, overwrite = false)
+            createdTarget = true
 
             if (!targetFile.exists() || targetFile.length() == 0L) {
                 logger.error("Snapshot validation failed")
@@ -189,54 +183,140 @@ class BackupService {
             ))
             saveHistory(history)
 
-            // Requirement 4: Cleanup happens automatically immediately AFTER successful snapshot creation.
-            enforceRetentionPolicy(type)
+            enforceRetentionPolicy()
             
             true
         } catch (e: Exception) {
             logger.error("CRITICAL: Snapshot creation failed: ${e.message}")
-            if (targetFile.exists()) targetFile.delete()
+            if (createdTarget && targetFile.exists()) targetFile.delete()
             false
         }
     }
 
-    /**
-     * Requirement: Intelligent Retention Cleanup System.
-     * Implementation of Requirement 1, 2, 3, 5, 6, 7.
-     */
-    private fun enforceRetentionPolicy(type: String) {
-        // Requirement 3: Manual restore points must NEVER be deleted.
-        if (type != "auto") return 
-        
+    private fun enforceRetentionPolicy() {
         logger.info("Retention cleanup triggered")
         
-        val history = loadHistory()
-        // Filter only auto backups and sort by oldest first
-        val autoEntries = history.filter { it.type == "auto" }.sortedBy { it.timestamp }
-        
-        if (autoEntries.size > MAX_AUTO_BACKUPS) {
-            val toDeleteCount = autoEntries.size - MAX_AUTO_BACKUPS
-            val itemsToDelete = autoEntries.take(toDeleteCount)
-            
-            itemsToDelete.forEach { entry ->
-                val file = File(baseBackupDir, entry.filename)
-                // Requirement 7: filesystem-safe verification before deletion
-                if (file.exists()) {
-                    logger.info("Deleting oldest auto-backup: ${entry.filename}")
-                    file.delete()
+        val history = reconcileHistoryWithFilesystem(loadHistory())
+        pruneBackups(history, "auto", MAX_AUTO_BACKUPS)
+        pruneBackups(history, "manual", MAX_MANUAL_RESTORE_POINTS)
+        saveHistory(history.sortedBy { backupSortTime(it) })
+
+        val meta = loadMeta()
+        syncMetaCounts(meta, history)
+        saveMeta(meta)
+
+        logger.info("Retention sync completed")
+    }
+
+    private fun reconcileHistoryWithFilesystem(history: MutableList<BackupHistoryItem>): MutableList<BackupHistoryItem> {
+        val byFileName = linkedMapOf<String, BackupHistoryItem>()
+
+        history.forEach { entry ->
+            if (backupTypeFor(entry.filename) == null) {
+                logger.warn("Ignoring unknown backup history entry: ${entry.filename}")
+                return@forEach
+            }
+
+            val file = File(baseBackupDir, entry.filename)
+            if (file.exists()) {
+                byFileName.putIfAbsent(entry.filename, entry)
+            } else {
+                logger.warn("Removing stale backup metadata for missing file: ${entry.filename}")
+            }
+        }
+
+        baseBackupDir.listFiles()
+            ?.filter { it.isFile && backupTypeFor(it.name) != null }
+            ?.forEach { file ->
+                if (!byFileName.containsKey(file.name)) {
+                    val type = backupTypeFor(file.name) ?: return@forEach
+                    logger.info("Importing orphan backup file into metadata: ${file.name}")
+                    byFileName[file.name] = BackupHistoryItem(
+                        filename = file.name,
+                        type = type,
+                        timestamp = timestampFor(file),
+                        transactionCount = 0,
+                        balanceAtBackup = "Unknown"
+                    )
                 }
+            }
+
+        return byFileName.values.toMutableList()
+    }
+
+    private fun pruneBackups(history: MutableList<BackupHistoryItem>, type: String, maxCount: Int) {
+        val entries = history
+            .filter { it.type == type }
+            .sortedByDescending { backupSortTime(it) }
+
+        entries.drop(maxCount).forEach { entry ->
+            if (deleteBackupFile(entry)) {
                 history.remove(entry)
             }
-            
-            // Requirement 5: persist updated state
-            saveHistory(history)
-            
-            // Requirement 5: backup_meta.json counters must resync
-            val meta = loadMeta() // loadMeta automatically resyncs counts from history
-            saveMeta(meta)
-            
-            logger.info("Retention sync completed")
         }
+    }
+
+    private fun deleteBackupFile(entry: BackupHistoryItem): Boolean {
+        val file = File(baseBackupDir, entry.filename)
+        if (!isSafeBackupFile(file)) {
+            logger.warn("Skipped unsafe backup deletion path: ${file.absolutePath}")
+            return false
+        }
+
+        if (!file.exists()) return true
+
+        return if (file.delete()) {
+            logger.info("Deleted retained-out backup: ${entry.filename}")
+            true
+        } else {
+            logger.warn("Failed to delete retained-out backup: ${entry.filename}")
+            false
+        }
+    }
+
+    private fun isSafeBackupFile(file: File): Boolean {
+        val type = backupTypeFor(file.name) ?: return false
+        val canonicalBase = baseBackupDir.canonicalFile.toPath()
+        val canonicalFile = file.canonicalFile.toPath()
+        return type in setOf("auto", "manual", "emergency") &&
+            canonicalFile.startsWith(canonicalBase) &&
+            file.extension.equals("db", ignoreCase = true)
+    }
+
+    private fun backupTypeFor(filename: String): String? = when {
+        filename.matches(Regex("""^ledger_backup_\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}\.db$""")) -> "auto"
+        filename.matches(Regex("""^manual_restore_point_\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}\.db$""")) -> "manual"
+        filename.matches(Regex("""^emergency_pre_restore_(\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}|\d+)\.db$""")) -> "emergency"
+        else -> null
+    }
+
+    private fun timestampFor(file: File): String {
+        val name = file.name.removeSuffix(".db")
+        val rawTimestamp = when {
+            name.startsWith("ledger_backup_") -> name.removePrefix("ledger_backup_")
+            name.startsWith("manual_restore_point_") -> name.removePrefix("manual_restore_point_")
+            name.startsWith("emergency_pre_restore_") -> name.removePrefix("emergency_pre_restore_")
+            else -> ""
+        }
+
+        return runCatching {
+            LocalDateTime.parse(rawTimestamp, backupTimestampFormatter).toString()
+        }.recoverCatching {
+            val millis = rawTimestamp.toLong()
+            LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault()).toString()
+        }.getOrElse {
+            LocalDateTime.ofInstant(Instant.ofEpochMilli(file.lastModified()), ZoneId.systemDefault()).toString()
+        }
+    }
+
+    private fun backupSortTime(entry: BackupHistoryItem): LocalDateTime {
+        return runCatching { LocalDateTime.parse(entry.timestamp) }
+            .getOrElse { LocalDateTime.MIN }
+    }
+
+    private fun syncMetaCounts(meta: BackupMeta, history: List<BackupHistoryItem>) {
+        meta.autoBackupCount = history.count { it.type == "auto" }
+        meta.manualRestorePointCount = history.count { it.type == "manual" }
     }
 
     fun getBackupStatus(): Map<String, String> {
@@ -284,17 +364,17 @@ class BackupService {
             logger.info("Restore verification passed")
 
             // 3. Atomic Swap (Requirement 1)
-            com.household.ledger.database.DatabaseFactory.resetConnection()
+            DatabaseFactory.resetConnection()
             
             tempFile.copyTo(dbFile, overwrite = true)
             logger.info("Database swapped successfully")
 
             // 4. Post-Restore Sync (Requirement 2)
-            val txService = com.household.ledger.database.TransactionService()
+            val txService = TransactionService()
             txService.recalculateBalances()
             
             // Resync counts and metadata
-            val history = loadHistory()
+            val history = reconcileHistoryWithFilesystem(loadHistory())
             val meta = BackupMeta(
                 autoBackupCount = history.count { it.type == "auto" },
                 manualRestorePointCount = history.count { it.type == "manual" },

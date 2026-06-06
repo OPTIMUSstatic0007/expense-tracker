@@ -1,24 +1,21 @@
 package com.household.ledger.database
 
+import com.household.ledger.storage.StoragePaths
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
-import java.io.File
 import java.sql.DriverManager
 
 object DatabaseFactory {
     private lateinit var database: Database
 
     fun init() {
-        val databasePath = "backend/data"
-        val databaseFile = File(databasePath)
-        if (!databaseFile.exists()) {
-            databaseFile.mkdirs()
-        }
+        val databaseFile = StoragePaths.databaseFile
+        databaseFile.parentFile.mkdirs()
         
         val driverClassName = "org.sqlite.JDBC"
-        val jdbcUrl = "jdbc:sqlite:$databasePath/ledger.db"
+        val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
 
         // 1. Connect Exposed foundation
         database = Database.connect(jdbcUrl, driverClassName)
