@@ -2293,4 +2293,9 @@ body {
     [data-theme="dark"] .btn-action-mobile:active {
         background: var(--border);
     }
+
+    /* Premium breathing room before footer in AMOLED */
+    [data-theme="dark"] .product-footer {
+        margin-top: 80px;
+    }
 }
