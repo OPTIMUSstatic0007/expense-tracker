@@ -2283,4 +2283,14 @@ body {
         color: #737373;
         opacity: 1;
     }
+
+    [data-theme="dark"] .btn-action-mobile {
+        background: var(--surface-alt);
+        color: var(--text-primary);
+        border-color: var(--border);
+    }
+
+    [data-theme="dark"] .btn-action-mobile:active {
+        background: var(--border);
+    }
 }
