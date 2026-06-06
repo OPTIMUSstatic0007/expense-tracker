@@ -1,10 +1,8 @@
 {
-    "pendingMutationCount": 1,
     "totalMutations": 10,
     "lastActivityTime": "2026-06-06 17:18:37",
     "lastMutationType": "ADD",
-    "lastBackupTime": "2026-06-06 17:20:05",
+    "lastBackupTime": "2026-06-06 17:25:09",
     "autoBackupCount": 10,
-    "manualRestorePointCount": 5,
-    "isDirty": true
+    "manualRestorePointCount": 5
 }
