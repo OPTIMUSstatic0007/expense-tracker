@@ -9,6 +9,39 @@ let currentPage = 1;
 let hasMore = false;
 let isLoadingMore = false;
 
+
+// ═══════════════════════════════════════════════════════════════════
+// THEME MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+}
+
+function toggleTheme() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+    } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+    }
+
+    // Refresh to pick up new theme colors in charts
+    if (typeof refreshData === 'function') {
+        refreshData();
+    }
+}
+
+initTheme();
+
 // DOM Elements
 const form = document.getElementById('exp-form');
 const historyBody = document.getElementById('history-body');
@@ -309,6 +342,14 @@ let lastExportTime = null;
 
 function setupNavDrawer() {
     if (!hamburgerBtn || !navDrawer || !navDrawerScrim) return;
+
+
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            toggleTheme();
+        });
+    }
 
     // Hamburger tap → open drawer
     hamburgerBtn.addEventListener('click', (e) => {
@@ -1050,6 +1091,8 @@ function processAnalyticsData(data) {
     renderCharts(data);
 }
 
+function getCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
 function renderCharts(data) {
     if (typeof Chart === 'undefined') return;
 
@@ -1126,10 +1169,10 @@ function renderCharts(data) {
         plugins: {
             legend: {
                 position: 'bottom',
-                labels: { font: { family: 'Inter, sans-serif', size: 10 }, color: '#64748b', boxWidth: 12 }
+                labels: { font: { family: 'Inter, sans-serif', size: 10 }, color: getCssVar('--text-secondary') || '#64748b', boxWidth: 12 }
             },
             tooltip: {
-                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                backgroundColor: getCssVar('--surface') || 'rgba(15, 23, 42, 0.9)',
                 titleFont: { family: 'Inter, sans-serif', size: 12 },
                 bodyFont: { family: 'Inter, sans-serif', size: 13 },
                 padding: 10,
@@ -1143,15 +1186,15 @@ function renderCharts(data) {
             }
         },
         scales: {
-            x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#94a3b8' } },
-            y: { border: { display: false }, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 }, color: '#94a3b8', maxTicksLimit: 5 } }
+            x: { grid: { display: false }, ticks: { font: { size: 10 }, color: getCssVar('--text-secondary') || '#94a3b8' } },
+            y: { border: { display: false }, grid: { color: getCssVar('--border') || '#f1f5f9' }, ticks: { font: { size: 10 }, color: getCssVar('--text-secondary') || '#94a3b8', maxTicksLimit: 5 } }
         }
     };
 
     // 1. Monthly Expense Trend (Line)
     const ctxTrend = document.getElementById('monthlyTrendChart').getContext('2d');
     const gradientTrend = ctxTrend.createLinearGradient(0, 0, 0, 250);
-    gradientTrend.addColorStop(0, 'rgba(239, 68, 68, 0.2)');
+    gradientTrend.addColorStop(0, getCssVar('--danger-soft') || 'rgba(239, 68, 68, 0.2)');
     gradientTrend.addColorStop(1, 'rgba(239, 68, 68, 0)');
 
     analyticsCharts.monthlyTrend = new Chart(ctxTrend, {
@@ -1161,11 +1204,11 @@ function renderCharts(data) {
             datasets: [{
                 label: 'Expenses',
                 data: expenseData,
-                borderColor: '#ef4444',
+                borderColor: getCssVar('--danger') || '#ef4444',
                 backgroundColor: gradientTrend,
                 borderWidth: 2,
-                pointBackgroundColor: '#ffffff',
-                pointBorderColor: '#ef4444',
+                pointBackgroundColor: getCssVar('--surface') || '#ffffff',
+                pointBorderColor: getCssVar('--danger') || '#ef4444',
                 pointBorderWidth: 2,
                 pointRadius: 3,
                 fill: true,
@@ -1180,7 +1223,7 @@ function renderCharts(data) {
 
     // 2. Category Breakdown (Doughnut)
     const ctxCategory = document.getElementById('categoryBreakdownChart').getContext('2d');
-    const bgColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
+    const bgColors = [getCssVar('--accent'), getCssVar('--success'), getCssVar('--warning'), getCssVar('--danger'), '#8b5cf6', getCssVar('--text-secondary')];
 
     analyticsCharts.categoryBreakdown = new Chart(ctxCategory, {
         type: 'doughnut',
@@ -1203,7 +1246,7 @@ function renderCharts(data) {
                 }
             },
             plugins: {
-                legend: { position: 'right', labels: { font: { family: 'Inter, sans-serif', size: 10 }, color: '#64748b', boxWidth: 10, padding: 15 } },
+                legend: { position: 'right', labels: { font: { family: 'Inter, sans-serif', size: 10 }, color: getCssVar('--text-secondary') || '#64748b', boxWidth: 10, padding: 15 } },
                 tooltip: commonOptions.plugins.tooltip
             }
         }
@@ -1220,7 +1263,7 @@ function renderCharts(data) {
                 {
                     label: 'Income',
                     data: incomeData,
-                    backgroundColor: '#10b981',
+                    backgroundColor: getCssVar('--success') || '#10b981',
                     borderRadius: 4,
                     barPercentage: 0.6,
                     categoryPercentage: 0.8
@@ -1228,7 +1271,7 @@ function renderCharts(data) {
                 {
                     label: 'Expense',
                     data: expenseData,
-                    backgroundColor: '#ef4444',
+                    backgroundColor: getCssVar('--danger') || '#ef4444',
                     borderRadius: 4,
                     barPercentage: 0.6,
                     categoryPercentage: 0.8
