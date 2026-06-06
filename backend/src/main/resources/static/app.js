@@ -956,6 +956,15 @@ function closeAnalyticsPanel() {
 
 let analyticsCharts = {};
 
+function parseLedgerDate(dateString) {
+    if (dateString.includes('-')) {
+        const [year, month, day] = dateString.split('-');
+        return new Date(year, month - 1, day);
+    }
+    const [day, month, year] = dateString.split('/');
+    return new Date(year, month - 1, day);
+}
+
 async function loadAnalyticsData() {
     const loader = document.getElementById('analytics-loader');
     if (loader) loader.classList.remove('hidden');
@@ -976,7 +985,7 @@ async function loadAnalyticsData() {
 function processAnalyticsData(data) {
     if (!data || data.length === 0) return;
 
-    const now = new Date();
+    const now = new Date(); // Keep for "current period" logic
     const currentYear = now.getFullYear().toString();
     const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
 
@@ -989,7 +998,10 @@ function processAnalyticsData(data) {
 
     data.forEach(t => {
         const amount = parseFloat(t.amount);
-        const [y, m, d] = t.date.split('-');
+        const ledgerDate = parseLedgerDate(t.date);
+        const y = ledgerDate.getFullYear().toString();
+        const m = String(ledgerDate.getMonth() + 1).padStart(2, '0');
+        const d = String(ledgerDate.getDate()).padStart(2, '0');
 
         if (t.entryType === 'Debit') {
             totalExpenses += amount;
@@ -1054,7 +1066,10 @@ function renderCharts(data) {
     let categoryTotals = {};
 
     data.forEach(t => {
-        const [y, m, d] = t.date.split('-');
+        const ledgerDate = parseLedgerDate(t.date);
+        const y = ledgerDate.getFullYear().toString();
+        const m = String(ledgerDate.getMonth() + 1).padStart(2, '0');
+
         if (y !== currentYear) return; // Only process current year for charts
 
         const amount = parseFloat(t.amount);
@@ -1067,9 +1082,37 @@ function renderCharts(data) {
         }
     });
 
-    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const expenseData = Object.values(monthlyExpenses);
-    const incomeData = Object.values(monthlyIncome);
+    // Only show months that actually exist in the database or up to current month to avoid hallucinated future data
+    // Let's filter to only include months with data
+    const monthsWithData = new Set();
+    Object.keys(monthlyExpenses).forEach(m => {
+        if (monthlyExpenses[m] > 0 || monthlyIncome[m] > 0) {
+            monthsWithData.add(m);
+        }
+    });
+
+    // If no data, use current month as fallback so chart isn't totally empty
+    if (monthsWithData.size === 0) {
+        const now = new Date();
+        monthsWithData.add(String(now.getMonth() + 1).padStart(2, '0'));
+    }
+
+    const allMonths = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Find min and max month with data
+    let minMonthIdx = 11;
+    let maxMonthIdx = 0;
+    monthsWithData.forEach(m => {
+        const idx = parseInt(m, 10) - 1;
+        if (idx < minMonthIdx) minMonthIdx = idx;
+        if (idx > maxMonthIdx) maxMonthIdx = idx;
+    });
+
+    const activeMonthLabels = monthNames.slice(minMonthIdx, maxMonthIdx + 1);
+    const activeMonthKeys = allMonths.slice(minMonthIdx, maxMonthIdx + 1);
+    const expenseData = activeMonthKeys.map(k => monthlyExpenses[k]);
+    const incomeData = activeMonthKeys.map(k => monthlyIncome[k]);
 
     // Sort categories for breakdown
     const sortedCategories = Object.entries(categoryTotals).sort((a,b) => b[1] - a[1]).slice(0, 6); // top 6
@@ -1114,7 +1157,7 @@ function renderCharts(data) {
     analyticsCharts.monthlyTrend = new Chart(ctxTrend, {
         type: 'line',
         data: {
-            labels: monthLabels,
+            labels: activeMonthLabels,
             datasets: [{
                 label: 'Expenses',
                 data: expenseData,
@@ -1172,7 +1215,7 @@ function renderCharts(data) {
     analyticsCharts.incomeVsExpense = new Chart(ctxIncExp, {
         type: 'bar',
         data: {
-            labels: monthLabels,
+            labels: activeMonthLabels,
             datasets: [
                 {
                     label: 'Income',
