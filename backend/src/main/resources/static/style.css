@@ -790,7 +790,7 @@ body {
         grid-template-columns: repeat(2, 1fr);
         gap: 12px;
         padding: 0 16px;
-        margin: 16px auto;
+        margin: 16px auto 0;
     }
 
     /* Flatten DOM structure to enable the 2x2 grid */
@@ -814,7 +814,7 @@ body {
     .mini-label, .stat-label { font-size: 0.75rem; margin-bottom: 4px; }
     .mini-value, .stat-value { font-size: 1.25rem; }
 
-    .content-layout { grid-column: 1 / -1; grid-template-columns: 1fr; gap: 24px; margin-top: 12px; }
+    .content-layout { grid-column: 1 / -1; grid-template-columns: 1fr; gap: 24px; margin-top: 12px; margin-bottom: 0; }
     .form-section { position: static; }
     .input-grid { grid-template-columns: 1fr; gap: 12px; }
     .transaction-form { padding: 16px; }
@@ -2109,7 +2109,7 @@ body {
     /* ═══ End DB Center Panel ══════════════════════════════ */
 
     /* Footer — compact on mobile now that mgmt section is hidden */
-    .product-footer { margin-top: 32px; padding: 32px 20px; }
+    .product-footer { margin-top: 0 !important; padding: 10px 20px 16px; }
 }
 
 /* Footer Styles */
@@ -2296,6 +2296,6 @@ body {
 
     /* Premium breathing room before footer in AMOLED */
     [data-theme="dark"] .product-footer {
-        margin-top: 80px;
+        margin-top: 0 !important;
     }
 }
