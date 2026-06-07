@@ -50,10 +50,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
 import com.example.expensetracker.local.ExpenseDatabase
 import com.example.expensetracker.repository.LocalRepository
 import com.example.expensetracker.viewmodel.TransactionViewModel
@@ -61,9 +64,6 @@ import com.example.expensetracker.ui.theme.ExpenseTrackerTheme
 
 class MainActivity : ComponentActivity() {
     
-    // Constant for the backend URL
-    // Use "http://10.0.2.2:8080" for Android Emulator to host PC
-    private val APP_URL = "http://10.0.2.2:8080"
     private lateinit var googleAuthManager: GoogleAuthManager
     private lateinit var expenseDatabase: ExpenseDatabase
     private lateinit var localRepository: LocalRepository
@@ -125,6 +125,17 @@ class MainActivity : ComponentActivity() {
                     Column(
                         modifier = Modifier.padding(innerPadding).fillMaxSize()
                     ) {
+                        val balance = transactions.sumOf { if (it.type.equals("Credit", ignoreCase = true)) it.amount else -it.amount }
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(text = "Household Ledger")
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(text = "Total Balance: $$balance", style = MaterialTheme.typography.headlineMedium)
+                            }
+                        }
 
                         if (transactions.isEmpty()) {
                             Box(
@@ -135,14 +146,25 @@ class MainActivity : ComponentActivity() {
                             }
                         } else {
                             LazyColumn(
-                                modifier = Modifier.fillMaxWidth().height(200.dp) // Fixed height to share space with WebView
+                                modifier = Modifier.fillMaxWidth().weight(1f)
                             ) {
                                 items(transactions) { tx ->
                                     Row(
-                                        modifier = Modifier.fillMaxWidth().padding(8.dp)
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(text = tx.note.ifEmpty { "Transaction" }, modifier = Modifier.weight(1f))
-                                        Text(text = "$${tx.amount}")
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(text = tx.category, style = MaterialTheme.typography.bodyLarge)
+                                            if (tx.note.isNotEmpty()) {
+                                                Text(text = tx.note, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                                            }
+                                        }
+                                        val isCredit = tx.type.equals("Credit", true)
+                                        Text(
+                                            text = "${if (isCredit) "+" else "-"}$${tx.amount}",
+                                            color = if (isCredit) Color.Green else Color.Red,
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
                                     }
                                 }
                             }
@@ -172,184 +194,6 @@ class MainActivity : ComponentActivity() {
                         ) {
                             Text("Sign Out")
                         }
-
-                        ExpenseTrackerWebView(
-                            url = APP_URL,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var webViewInstance by remember { mutableStateOf<WebView?>(null) }
-    var uploadMessage by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
-
-    // Register receiver to log download completion
-    DisposableEffect(context) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-                if (id != -1L) {
-                    Log.d("ExpenseTracker", "File saved to Downloads (ID: $id)")
-                }
-            }
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-
-                context.registerReceiver(
-                    receiver,
-                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                    Context.RECEIVER_NOT_EXPORTED
-                )
-
-            } else {
-
-                context.registerReceiver(
-                    receiver,
-                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-                )
-            }
-        }
-        onDispose {
-            context.unregisterReceiver(receiver)
-        }
-    }
-
-    val fileChooserLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val data = result.data
-            val results = if (data != null) {
-                val clipData = data.clipData
-                if (clipData != null) {
-                    Array(clipData.itemCount) { i -> clipData.getItemAt(i).uri }
-                } else {
-                    data.data?.let { arrayOf(it) }
-                }
-            } else null
-            uploadMessage?.onReceiveValue(results)
-        } else {
-            uploadMessage?.onReceiveValue(null)
-        }
-        uploadMessage = null
-    }
-
-    Box(modifier = modifier.fillMaxSize()) {
-        AndroidView(
-            factory = { context ->
-                WebView(context).apply {
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.loadWithOverviewMode = true
-                    settings.useWideViewPort = true
-                    settings.allowFileAccess = true
-                    settings.allowContentAccess = true
-
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                            isLoading = true
-                            errorMessage = null
-                        }
-
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            isLoading = false
-                        }
-
-                        override fun onReceivedError(
-                            view: WebView?,
-                            request: WebResourceRequest?,
-                            error: WebResourceError?
-                        ) {
-                            if (request?.isForMainFrame == true) {
-                                isLoading = false
-                                errorMessage = "Failed to connect to backend: ${error?.description ?: "Unknown error"}"
-                            }
-                        }
-                    }
-
-                    webChromeClient = object : WebChromeClient() {
-                        override fun onShowFileChooser(
-                            webView: WebView?,
-                            filePathCallback: ValueCallback<Array<Uri>>?,
-                            fileChooserParams: FileChooserParams?
-                        ): Boolean {
-                            uploadMessage?.onReceiveValue(null)
-                            uploadMessage = filePathCallback
-                            val intent = fileChooserParams?.createIntent()
-                            if (intent != null) {
-                                try {
-                                    fileChooserLauncher.launch(intent)
-                                } catch (e: Exception) {
-                                    uploadMessage = null
-                                    return false
-                                }
-                            } else {
-                                uploadMessage = null
-                                return false
-                            }
-                            return true
-                        }
-                    }
-
-                    setDownloadListener { downloadUrl, userAgent, contentDisposition, mimetype, contentLength ->
-                        Log.d("ExpenseTracker", "WebView download requested: $downloadUrl")
-                        val request = DownloadManager.Request(Uri.parse(downloadUrl)).apply {
-                            setMimeType(mimetype)
-                            addRequestHeader("User-Agent", userAgent)
-                            setDescription("Downloading file...")
-                            val fileName = URLUtil.guessFileName(downloadUrl, contentDisposition, mimetype)
-                            setTitle(fileName)
-                            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-                        }
-                        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                        try {
-                            dm.enqueue(request)
-                            Log.d("ExpenseTracker", "DownloadManager enqueue success for $downloadUrl")
-                        } catch (e: Exception) {
-                            Log.e("ExpenseTracker", "Download failed: ${e.message}")
-                        }
-                    }
-
-                    webViewInstance = this
-                    loadUrl(url)
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-
-        if (isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center)
-            )
-        }
-
-        errorMessage?.let { msg ->
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = msg)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = {
-                        errorMessage = null
-                        webViewInstance?.reload()
-                    }) {
-                        Text("Retry")
                     }
                 }
             }
