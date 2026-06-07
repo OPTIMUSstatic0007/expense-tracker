@@ -1,9 +1,5 @@
 package com.example.expensetracker
 
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-import com.example.expensetracker.repository.FirestoreRepository
-import com.example.expensetracker.model.Transaction
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
 import com.example.expensetracker.auth.GoogleAuthManager
