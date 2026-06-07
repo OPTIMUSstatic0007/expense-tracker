@@ -12,32 +12,52 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = DarkAccent,
+    onPrimary = DarkTextOnPrimary,
+    primaryContainer = DarkPrimarySoft,
+    onPrimaryContainer = DarkAccent,
+    secondary = DarkInfo,
+    onSecondary = DarkTextOnPrimary,
+    background = DarkBackground,
+    onBackground = DarkTextPrimary,
+    surface = DarkSurface,
+    onSurface = DarkTextPrimary,
+    surfaceVariant = DarkSurfaceAlt,
+    onSurfaceVariant = DarkTextSecondary,
+    error = DarkDanger,
+    onError = DarkTextOnPrimary,
+    errorContainer = DarkDangerSoft,
+    onErrorContainer = DarkDanger,
+    outline = DarkBorder,
+    outlineVariant = DarkBorderFocus
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = LightAccent,
+    onPrimary = LightTextOnPrimary,
+    primaryContainer = LightPrimarySoft,
+    onPrimaryContainer = LightAccent,
+    secondary = LightInfo,
+    onSecondary = LightTextOnPrimary,
+    background = LightBackground,
+    onBackground = LightTextPrimary,
+    surface = LightSurface,
+    onSurface = LightTextPrimary,
+    surfaceVariant = LightSurfaceAlt,
+    onSurfaceVariant = LightTextSecondary,
+    error = LightDanger,
+    onError = LightTextOnPrimary,
+    errorContainer = LightDangerSoft,
+    onErrorContainer = LightDanger,
+    outline = LightBorder,
+    outlineVariant = LightBorderFocus
 )
 
 @Composable
 fun ExpenseTrackerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false, // Disabled dynamic color to strictly enforce our custom theme
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -52,7 +72,7 @@ fun ExpenseTrackerTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = Typography, // Assume Typography is correctly defined elsewhere or use default
         content = content
     )
 }
