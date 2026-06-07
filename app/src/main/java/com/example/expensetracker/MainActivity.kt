@@ -1,5 +1,8 @@
 package com.example.expensetracker
 
+import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
+import com.example.expensetracker.auth.GoogleAuthManager
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -23,7 +26,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -53,12 +55,41 @@ class MainActivity : ComponentActivity() {
     // Constant for the backend URL
     // Use "http://10.0.2.2:8080" for Android Emulator to host PC
     private val APP_URL = "http://10.0.2.2:8080"
+    private lateinit var googleAuthManager: GoogleAuthManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // ENABLE WEBVIEW DEVTOOLS
         WebView.setWebContentsDebuggingEnabled(true)
         enableEdgeToEdge()
+        googleAuthManager = GoogleAuthManager(this)
+
+        val googleSignInLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+
+            googleAuthManager.handleSignInResult(
+                result.data,
+
+                onSuccess = { email ->
+
+                    Toast.makeText(
+                        this,
+                        "Signed in: $email",
+                        Toast.LENGTH_LONG
+                    ).show()
+                },
+
+                onError = { error ->
+
+                    Toast.makeText(
+                        this,
+                        error,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+        }
         setContent {
             ExpenseTrackerTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -74,10 +105,40 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    ExpenseTrackerWebView(
-                        url = APP_URL,
+                    Column(
                         modifier = Modifier.padding(innerPadding)
-                    )
+                    ) {
+
+                        Button(
+                            onClick = {
+
+                                val signInIntent =
+                                    googleAuthManager.getSignInIntent()
+
+                                googleSignInLauncher.launch(signInIntent)
+                            }
+                        ) {
+
+                            Text("Test Google Sign In")
+                        }
+                        Button(
+                            onClick = {
+                                googleAuthManager.signOut()
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Signed out",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        ) {
+                            Text("Sign Out")
+                        }
+
+                        ExpenseTrackerWebView(
+                            url = APP_URL,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
         }
@@ -106,7 +167,21 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED)
         } else {
-            context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+
+                context.registerReceiver(
+                    receiver,
+                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                    Context.RECEIVER_NOT_EXPORTED
+                )
+
+            } else {
+
+                context.registerReceiver(
+                    receiver,
+                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+                )
+            }
         }
         onDispose {
             context.unregisterReceiver(receiver)
