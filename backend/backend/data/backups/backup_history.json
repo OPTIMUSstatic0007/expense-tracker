@@ -1,8 +1,127 @@
 [
     {
-        "filename": "ledger_backup_2026_06_06_18_42_29.db",
+        "filename": "emergency_pre_restore_1780241222093.db",
+        "type": "emergency",
+        "timestamp": "2026-05-31T20:57:02.093",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "emergency_pre_restore_2026_06_02_12_50_14.db",
+        "type": "emergency",
+        "timestamp": "2026-06-02T12:50:14",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "emergency_pre_restore_2026_06_02_13_36_05.db",
+        "type": "emergency",
+        "timestamp": "2026-06-02T13:36:05",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "manual_restore_point_2026_06_05_15_26_55.db",
+        "type": "manual",
+        "timestamp": "2026-06-05T15:26:55",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "manual_restore_point_2026_06_05_15_27_08.db",
+        "type": "manual",
+        "timestamp": "2026-06-05T15:27:08",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "manual_restore_point_2026_06_06_14_49_25.db",
+        "type": "manual",
+        "timestamp": "2026-06-06T14:49:25",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "manual_restore_point_2026_06_06_17_17_15.db",
+        "type": "manual",
+        "timestamp": "2026-06-06T17:17:15",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "manual_restore_point_2026_06_06_17_20_05.db",
+        "type": "manual",
+        "timestamp": "2026-06-06T17:20:05",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_07_00_55_34.db",
         "type": "auto",
-        "timestamp": "2026-06-06T18:42:29.612663957",
+        "timestamp": "2026-06-07T00:55:34",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_07_14_56_41.db",
+        "type": "auto",
+        "timestamp": "2026-06-07T14:56:41",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_07_15_04_07.db",
+        "type": "auto",
+        "timestamp": "2026-06-07T15:04:07",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_07_15_08_27.db",
+        "type": "auto",
+        "timestamp": "2026-06-07T15:08:27",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_07_15_28_39.db",
+        "type": "auto",
+        "timestamp": "2026-06-07T15:28:39.351826900",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_07_15_34_03.db",
+        "type": "auto",
+        "timestamp": "2026-06-07T15:34:03.406060900",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_07_17_02_36.db",
+        "type": "auto",
+        "timestamp": "2026-06-07T17:02:36.131913400",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_07_17_18_54.db",
+        "type": "auto",
+        "timestamp": "2026-06-07T17:18:54.234327100",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_07_18_14_33.db",
+        "type": "auto",
+        "timestamp": "2026-06-07T18:14:33.795197200",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_07_18_22_16.db",
+        "type": "auto",
+        "timestamp": "2026-06-07T18:22:16.181886400",
         "transactionCount": 0,
         "balanceAtBackup": "0.00"
     }
