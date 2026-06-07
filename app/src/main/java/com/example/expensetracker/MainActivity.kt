@@ -28,10 +28,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
@@ -39,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +53,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.expensetracker.local.ExpenseDatabase
+import com.example.expensetracker.repository.LocalRepository
+import com.example.expensetracker.viewmodel.TransactionViewModel
 import com.example.expensetracker.ui.theme.ExpenseTrackerTheme
 
 class MainActivity : ComponentActivity() {
@@ -56,6 +65,8 @@ class MainActivity : ComponentActivity() {
     // Use "http://10.0.2.2:8080" for Android Emulator to host PC
     private val APP_URL = "http://10.0.2.2:8080"
     private lateinit var googleAuthManager: GoogleAuthManager
+    private lateinit var expenseDatabase: ExpenseDatabase
+    private lateinit var localRepository: LocalRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,6 +74,8 @@ class MainActivity : ComponentActivity() {
         WebView.setWebContentsDebuggingEnabled(true)
         enableEdgeToEdge()
         googleAuthManager = GoogleAuthManager(this)
+        expenseDatabase = ExpenseDatabase.getInstance(this)
+        localRepository = LocalRepository(expenseDatabase.transactionDao())
 
         val googleSignInLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
@@ -90,8 +103,13 @@ class MainActivity : ComponentActivity() {
             )
         }
         setContent {
+            val transactionViewModel: TransactionViewModel = viewModel(
+                factory = TransactionViewModel.Factory(localRepository)
+            )
+
             ExpenseTrackerTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    val transactions by transactionViewModel.allTransactions.collectAsState()
                     // Request Notification Permission for API 33+ to show Download Progress
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         val permissionLauncher = rememberLauncherForActivityResult(
@@ -105,8 +123,30 @@ class MainActivity : ComponentActivity() {
                     }
 
                     Column(
-                        modifier = Modifier.padding(innerPadding)
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
                     ) {
+
+                        if (transactions.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("No transactions available. Pull down or add one.")
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth().height(200.dp) // Fixed height to share space with WebView
+                            ) {
+                                items(transactions) { tx ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(8.dp)
+                                    ) {
+                                        Text(text = tx.note.ifEmpty { "Transaction" }, modifier = Modifier.weight(1f))
+                                        Text(text = "$${tx.amount}")
+                                    }
+                                }
+                            }
+                        }
 
                         Button(
                             onClick = {
@@ -135,7 +175,7 @@ class MainActivity : ComponentActivity() {
 
                         ExpenseTrackerWebView(
                             url = APP_URL,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
