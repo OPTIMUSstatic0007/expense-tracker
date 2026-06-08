@@ -575,15 +575,9 @@ async function loadTransactions(append = false) {
     }
 
     try {
-        let data;
-        if (window.AndroidBridge) {
-            const bridgeData = window.AndroidBridge.getTransactions(currentPage, 30);
-            data = JSON.parse(bridgeData);
-        } else {
-            const response = await fetch(`${API_BASE_URL}?page=${currentPage}&limit=30`);
-            if (!response.ok) throw new Error('Fetch failed');
-            data = await response.json();
-        }
+        const response = await fetch(`${API_BASE_URL}?page=${currentPage}&limit=30`);
+        if (!response.ok) throw new Error('Fetch failed');
+        const data = await response.json();
 
         if (append) {
             transactions = [...transactions, ...data.transactions];
@@ -859,41 +853,21 @@ if (form) {
             notes: document.getElementById('notes').value
         };
         try {
-            if (window.AndroidBridge) {
-                let bridgeRes;
-                if (editingId) {
-                    bridgeRes = window.AndroidBridge.updateTransaction(editingId.toString(), JSON.stringify(data));
-                } else {
-                    bridgeRes = window.AndroidBridge.addTransaction(JSON.stringify(data));
-                }
-
-                const responseData = JSON.parse(bridgeRes);
-                if (responseData.status === 'ok') {
-                    showToast(editingId ? 'Entry updated' : 'Entry added');
-                    if (isMobile()) { closeMobileForm(); } else { closeModal(); }
-                    currentPage = 1;
-                    loadTransactions();
-                    updateBackupStatus();
-                } else {
-                    showToast('Save failed: ' + responseData.error, 'error');
-                }
+            const response = await fetch(editingId ? `${API_BASE_URL}/${editingId}` : API_BASE_URL, {
+                method: editingId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (response.ok) {
+                showToast(editingId ? 'Entry updated' : 'Entry added');
+                // Close whichever surface is active
+                if (isMobile()) { closeMobileForm(); } else { closeModal(); }
+                currentPage = 1;
+                loadTransactions();
+                updateBackupStatus();
             } else {
-                const response = await fetch(editingId ? `${API_BASE_URL}/${editingId}` : API_BASE_URL, {
-                    method: editingId ? 'PUT' : 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                if (response.ok) {
-                    showToast(editingId ? 'Entry updated' : 'Entry added');
-                    // Close whichever surface is active
-                    if (isMobile()) { closeMobileForm(); } else { closeModal(); }
-                    currentPage = 1;
-                    loadTransactions();
-                    updateBackupStatus();
-                } else {
-                    const err = await response.text();
-                    showToast('Save failed: ' + (err || 'Server error'), 'error');
-                }
+                const err = await response.text();
+                showToast('Save failed: ' + (err || 'Server error'), 'error');
             }
         } catch (e) {
             showToast('Error saving data', 'error');
@@ -905,28 +879,15 @@ if (form) {
 async function deleteTransaction(id) {
     if (!confirm('Delete this entry?')) return;
     try {
-        if (window.AndroidBridge) {
-            const bridgeRes = window.AndroidBridge.deleteTransaction(id.toString());
-            const responseData = JSON.parse(bridgeRes);
-            if (responseData.status === 'ok') {
-                showToast('Deleted');
-                currentPage = 1;
-                loadTransactions();
-                updateBackupStatus();
-            } else {
-                showToast('Delete failed: ' + responseData.error, 'error');
-            }
+        const response = await fetch(`${API_BASE_URL}/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+            showToast('Deleted');
+            currentPage = 1;
+            loadTransactions();
+            updateBackupStatus();
         } else {
-            const response = await fetch(`${API_BASE_URL}/${id}`, { method: 'DELETE' });
-            if (response.ok) {
-                showToast('Deleted');
-                currentPage = 1;
-                loadTransactions();
-                updateBackupStatus();
-            } else {
-                const err = await response.text();
-                showToast('Delete failed: ' + (err || 'Server error'), 'error');
-            }
+            const err = await response.text();
+            showToast('Delete failed: ' + (err || 'Server error'), 'error');
         }
     } catch (e) {
         showToast('Delete failed', 'error');
