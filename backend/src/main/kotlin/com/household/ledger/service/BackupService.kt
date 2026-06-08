@@ -7,7 +7,7 @@ import com.household.ledger.storage.StoragePaths
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.slf4j.LoggerFactory
+import com.household.ledger.utils.AppLogger
 import java.io.File
 import java.sql.DriverManager
 import java.time.Instant
@@ -37,7 +37,7 @@ data class BackupHistoryItem(
 )
 
 class BackupService {
-    private val logger = LoggerFactory.getLogger(BackupService::class.java)
+
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
 
     private val MAX_AUTO_BACKUPS = 10
@@ -45,7 +45,7 @@ class BackupService {
     private val backupTimestampFormatter = DateTimeFormatter.ofPattern("yyyy_MM_dd_HH_mm_ss")
 
     init {
-        logger.info("Smart Backup Engine initialized | Threshold: 10 | Auto Retention: 10 | Restore Point Retention: 5")
+        AppLogger.info("BackupService", "Smart Backup Engine initialized | Threshold: 10 | Auto Retention: 10 | Restore Point Retention: 5")
     }
 
     private val dbFile: File by lazy {
@@ -97,14 +97,14 @@ class BackupService {
         meta.lastMutationType = mutationType
         meta.isDirty = true
         
-        logger.info("Ledger Mutation: $mutationType | Pending: ${meta.pendingMutationCount} | Total: ${meta.totalMutations}")
+        AppLogger.info("BackupService", "Ledger Mutation: $mutationType | Pending: ${meta.pendingMutationCount} | Total: ${meta.totalMutations}")
 
         // 2. Persistent metadata write (instant sync)
         saveMeta(meta)
 
         // 3. Smart Threshold Engine check
         if (meta.pendingMutationCount >= 10) {
-            logger.info("Smart Backup: Threshold (10) reached. Triggering physical snapshot...")
+            AppLogger.info("BackupService", "Smart Backup: Threshold (10) reached. Triggering physical snapshot...")
             if (performPhysicalBackup("auto", transactions)) {
                 val updatedMeta = loadMeta()
                 updatedMeta.pendingMutationCount = 0
@@ -149,15 +149,15 @@ class BackupService {
         val targetFile = File(baseBackupDir, fileName)
         var createdTarget = false
 
-        logger.info("Initiating snapshot | Type: $type | Target: ${targetFile.absolutePath}")
+        AppLogger.info("BackupService", "Initiating snapshot | Type: $type | Target: ${targetFile.absolutePath}")
 
         return try {
             if (!dbFile.exists()) {
-                logger.error("Snapshot failed: Source database not found at ${dbFile.absolutePath}")
+                AppLogger.error("BackupService", "Snapshot failed: Source database not found at ${dbFile.absolutePath}")
                 return false
             }
             if (targetFile.exists()) {
-                logger.error("Snapshot failed: Target already exists at ${targetFile.absolutePath}")
+                AppLogger.error("BackupService", "Snapshot failed: Target already exists at ${targetFile.absolutePath}")
                 return false
             }
 
@@ -165,12 +165,12 @@ class BackupService {
             createdTarget = true
 
             if (!targetFile.exists() || targetFile.length() == 0L) {
-                logger.error("Snapshot validation failed")
+                AppLogger.error("BackupService", "Snapshot validation failed")
                 if (targetFile.exists()) targetFile.delete()
                 return false
             }
 
-            logger.info("Snapshot verified: ${targetFile.name}")
+            AppLogger.info("BackupService", "Snapshot verified: ${targetFile.name}")
 
             val history = loadHistory()
             val balance = if (transactions.isNotEmpty()) transactions.last().balanceAfter?.toString() ?: "0.00" else "0.00"
@@ -187,14 +187,14 @@ class BackupService {
             
             true
         } catch (e: Exception) {
-            logger.error("CRITICAL: Snapshot creation failed: ${e.message}")
+            AppLogger.error("BackupService", "CRITICAL: Snapshot creation failed: ${e.message}")
             if (createdTarget && targetFile.exists()) targetFile.delete()
             false
         }
     }
 
     private fun enforceRetentionPolicy() {
-        logger.info("Retention cleanup triggered")
+        AppLogger.info("BackupService", "Retention cleanup triggered")
         
         val history = reconcileHistoryWithFilesystem(loadHistory())
         pruneBackups(history, "auto", MAX_AUTO_BACKUPS)
@@ -205,7 +205,7 @@ class BackupService {
         syncMetaCounts(meta, history)
         saveMeta(meta)
 
-        logger.info("Retention sync completed")
+        AppLogger.info("BackupService", "Retention sync completed")
     }
 
     private fun reconcileHistoryWithFilesystem(history: MutableList<BackupHistoryItem>): MutableList<BackupHistoryItem> {
@@ -213,7 +213,7 @@ class BackupService {
 
         history.forEach { entry ->
             if (backupTypeFor(entry.filename) == null) {
-                logger.warn("Ignoring unknown backup history entry: ${entry.filename}")
+                AppLogger.info("BackupService", "Ignoring unknown backup history entry: ${entry.filename}")
                 return@forEach
             }
 
@@ -221,7 +221,7 @@ class BackupService {
             if (file.exists()) {
                 byFileName.putIfAbsent(entry.filename, entry)
             } else {
-                logger.warn("Removing stale backup metadata for missing file: ${entry.filename}")
+                AppLogger.info("BackupService", "Removing stale backup metadata for missing file: ${entry.filename}")
             }
         }
 
@@ -230,7 +230,7 @@ class BackupService {
             ?.forEach { file ->
                 if (!byFileName.containsKey(file.name)) {
                     val type = backupTypeFor(file.name) ?: return@forEach
-                    logger.info("Importing orphan backup file into metadata: ${file.name}")
+                    AppLogger.info("BackupService", "Importing orphan backup file into metadata: ${file.name}")
                     byFileName[file.name] = BackupHistoryItem(
                         filename = file.name,
                         type = type,
@@ -259,17 +259,17 @@ class BackupService {
     private fun deleteBackupFile(entry: BackupHistoryItem): Boolean {
         val file = File(baseBackupDir, entry.filename)
         if (!isSafeBackupFile(file)) {
-            logger.warn("Skipped unsafe backup deletion path: ${file.absolutePath}")
+            AppLogger.info("BackupService", "Skipped unsafe backup deletion path: ${file.absolutePath}")
             return false
         }
 
         if (!file.exists()) return true
 
         return if (file.delete()) {
-            logger.info("Deleted retained-out backup: ${entry.filename}")
+            AppLogger.info("BackupService", "Deleted retained-out backup: ${entry.filename}")
             true
         } else {
-            logger.warn("Failed to delete retained-out backup: ${entry.filename}")
+            AppLogger.info("BackupService", "Failed to delete retained-out backup: ${entry.filename}")
             false
         }
     }
@@ -334,14 +334,14 @@ class BackupService {
     }
 
     suspend fun restoreDatabase(tempFile: File, currentTransactions: List<Transaction>): Boolean {
-        logger.info("Restore initiated")
+        AppLogger.info("BackupService", "Restore initiated")
         try {
             // 1. Emergency snapshot of current state
             performPhysicalBackup("emergency", currentTransactions)
 
             // 2. Integrity Verification (Requirement 3)
             if (!tempFile.exists() || tempFile.length() == 0L) {
-                logger.error("Restore failed: File invalid or empty")
+                AppLogger.error("BackupService", "Restore failed: File invalid or empty")
                 return false
             }
 
@@ -356,18 +356,18 @@ class BackupService {
                 }
                 true
             } catch (e: Exception) {
-                logger.error("Restore verification failed: Not a valid SQLite database | ${e.message}")
+                AppLogger.error("BackupService", "Restore verification failed: Not a valid SQLite database | ${e.message}")
                 false
             }
 
             if (!isValid) return false
-            logger.info("Restore verification passed")
+            AppLogger.info("BackupService", "Restore verification passed")
 
             // 3. Atomic Swap (Requirement 1)
             DatabaseFactory.resetConnection()
             
             tempFile.copyTo(dbFile, overwrite = true)
-            logger.info("Database swapped successfully")
+            AppLogger.info("BackupService", "Database swapped successfully")
 
             // 4. Post-Restore Sync (Requirement 2)
             val txService = TransactionService()
@@ -384,10 +384,10 @@ class BackupService {
             )
             saveMeta(meta)
 
-            logger.info("Post-restore sync completed")
+            AppLogger.info("BackupService", "Post-restore sync completed")
             return true
         } catch (e: Exception) { 
-            logger.error("Restore failed: ${e.message}")
+            AppLogger.error("BackupService", "Restore failed: ${e.message}")
             return false 
         }
     }
