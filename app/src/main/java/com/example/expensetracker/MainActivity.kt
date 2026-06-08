@@ -49,6 +49,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.expensetracker.ui.theme.ExpenseTrackerTheme
+import com.example.expensetracker.local.ExpenseDatabase
+import com.example.expensetracker.repository.LocalRepository
+import com.example.expensetracker.bridge.AndroidBridge
 
 class MainActivity : ComponentActivity() {
     
@@ -219,6 +222,10 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
                     settings.allowContentAccess = true
                     settings.allowFileAccessFromFileURLs = true
                     settings.allowUniversalAccessFromFileURLs = true
+
+                    val database = ExpenseDatabase.getInstance(context)
+                    val repository = LocalRepository(database.transactionDao())
+                    addJavascriptInterface(AndroidBridge(repository), "AndroidBridge")
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
