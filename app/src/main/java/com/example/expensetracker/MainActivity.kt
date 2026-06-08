@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
     
     // Constant for the backend URL
     // Use "http://10.0.2.2:8080" for Android Emulator to host PC
-    private val APP_URL = "http://10.0.2.2:8080"
+    private val APP_URL = "file:///android_asset/index.html"
     private lateinit var googleAuthManager: GoogleAuthManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -217,6 +217,8 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
                     settings.useWideViewPort = true
                     settings.allowFileAccess = true
                     settings.allowContentAccess = true
+                    settings.allowFileAccessFromFileURLs = true
+                    settings.allowUniversalAccessFromFileURLs = true
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
