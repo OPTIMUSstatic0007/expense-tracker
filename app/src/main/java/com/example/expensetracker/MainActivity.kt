@@ -1,9 +1,8 @@
+
 package com.example.expensetracker
 
-import androidx.activity.result.contract.ActivityResultContracts
-import android.widget.Toast
-import com.example.expensetracker.auth.GoogleAuthManager
 import android.annotation.SuppressLint
+import androidx.activity.compose.rememberLauncherForActivityResult
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -22,10 +21,11 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -49,8 +49,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.expensetracker.ui.theme.ExpenseTrackerTheme
-import com.example.expensetracker.local.ExpenseDatabase
-import com.example.expensetracker.repository.LocalRepository
+import com.example.expensetracker.auth.GoogleAuthManager
+import com.household.ledger.database.DatabaseFactory
+import com.household.ledger.database.TransactionService
 import com.example.expensetracker.bridge.AndroidBridge
 
 class MainActivity : ComponentActivity() {
@@ -78,6 +79,7 @@ class MainActivity : ComponentActivity() {
 
                     Toast.makeText(
                         this,
+
                         "Signed in: $email",
                         Toast.LENGTH_LONG
                     ).show()
@@ -223,9 +225,9 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
                     settings.allowFileAccessFromFileURLs = true
                     settings.allowUniversalAccessFromFileURLs = true
 
-                    val database = ExpenseDatabase.getInstance(context)
-                    val repository = LocalRepository(database.transactionDao())
-                    addJavascriptInterface(AndroidBridge(repository), "AndroidBridge")
+                    DatabaseFactory.init()
+                    val transactionService = TransactionService()
+                    addJavascriptInterface(AndroidBridge(transactionService), "AndroidBridge")
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {

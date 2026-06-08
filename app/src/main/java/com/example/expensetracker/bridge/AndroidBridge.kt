@@ -2,93 +2,52 @@ package com.example.expensetracker.bridge
 
 import android.webkit.JavascriptInterface
 import android.util.Log
-import com.example.expensetracker.repository.LocalRepository
-import com.example.expensetracker.local.TransactionEntity
+import com.household.ledger.database.TransactionService
+import com.household.ledger.models.Transaction
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.json.JSONArray
-import kotlinx.coroutines.flow.first
-import java.util.UUID
-import java.util.Calendar
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.math.BigDecimal
 
-class AndroidBridge(private val repository: LocalRepository) {
-
-    private fun parseDateToLong(dateStr: String): Long {
-        try {
-            val parts = dateStr.split("/")
-            if (parts.size == 3) {
-                val cal = Calendar.getInstance()
-                cal.set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt(), 0, 0, 0)
-                cal.set(Calendar.MILLISECOND, 0)
-                return cal.timeInMillis
-            }
-        } catch (e: Exception) {
-            Log.e("AndroidBridge", "Error parsing date: $dateStr", e)
-        }
-        return System.currentTimeMillis()
-    }
-
-    private fun formatDate(timestamp: Long): String {
-        val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-        return sdf.format(timestamp)
-    }
+class AndroidBridge(private val transactionService: TransactionService) {
 
     @JavascriptInterface
     fun getTransactions(page: Int, limit: Int): String {
         Log.d("AndroidBridge", "getTransactions called page=$page limit=$limit")
         return runBlocking {
-            val entities = repository.getAllTransactions().first()
-            val sortedEntities = entities.sortedByDescending { it.createdAt }
+            try {
+                Log.d("AndroidBridge", "DB Source path: com.household.ledger.database.DatabaseFactory")
+                val transactions = transactionService.getPagedTransactions(page, limit)
+                val totalCount = transactionService.getTotalCount()
 
-            val startIndex = (page - 1) * limit
-            val endIndex = minOf(startIndex + limit, sortedEntities.size)
-
-            val pagedEntities = if (startIndex < sortedEntities.size) {
-                sortedEntities.subList(startIndex, endIndex)
-            } else {
-                emptyList()
-            }
-
-            val jsonArray = JSONArray()
-            for (entity in pagedEntities) {
-                val obj = JSONObject()
-                obj.put("id", entity.id)
-                obj.put("amount", entity.amount)
-                obj.put("entryType", entity.type)
-                obj.put("category", entity.category)
-                obj.put("date", formatDate(entity.createdAt))
-
-                // Parse note for extra fields
-                var expenseType = ""
-                var paidTo = ""
-                var notes = ""
-                try {
-                    val noteObj = JSONObject(entity.note)
-                    expenseType = noteObj.optString("expenseType", "")
-                    paidTo = noteObj.optString("paidTo", "")
-                    notes = noteObj.optString("notes", "")
-                } catch (e: Exception) {
-                    // Fallback to raw note
-                    notes = entity.note
+                val jsonArray = JSONArray()
+                for (t in transactions) {
+                    val obj = JSONObject()
+                    obj.put("id", t.id)
+                    obj.put("amount", t.amount.toDouble())
+                    obj.put("entryType", t.entryType)
+                    obj.put("category", t.category)
+                    obj.put("date", t.date)
+                    obj.put("expenseType", t.expenseType)
+                    obj.put("paidTo", t.paidTo)
+                    obj.put("notes", t.notes)
+                    obj.put("balanceAfter", t.balanceAfter?.toDouble() ?: 0.0)
+                    jsonArray.put(obj)
                 }
 
-                obj.put("expenseType", expenseType)
-                obj.put("paidTo", paidTo)
-                obj.put("notes", notes)
+                val result = JSONObject()
+                result.put("transactions", jsonArray)
+                result.put("hasMore", (page * limit) < totalCount)
 
-                // Keep balanceAfter 0 for now as it might be calculated in JS, or we provide it
-                obj.put("balanceAfter", 0.0)
-
-                jsonArray.put(obj)
+                Log.d("AndroidBridge", "getTransactions success: returned ${transactions.size} records")
+                result.toString()
+            } catch (e: Exception) {
+                Log.e("AndroidBridge", "getTransactions error", e)
+                val result = JSONObject()
+                result.put("transactions", JSONArray())
+                result.put("hasMore", false)
+                result.toString()
             }
-
-            val result = JSONObject()
-            result.put("transactions", jsonArray)
-            result.put("hasMore", endIndex < sortedEntities.size)
-
-            result.toString()
         }
     }
 
@@ -98,25 +57,19 @@ class AndroidBridge(private val repository: LocalRepository) {
         return runBlocking {
             try {
                 val obj = JSONObject(transactionJson)
-
-                val noteData = JSONObject()
-                noteData.put("notes", obj.optString("notes", ""))
-                noteData.put("expenseType", obj.optString("expenseType", ""))
-                noteData.put("paidTo", obj.optString("paidTo", ""))
-
-                val entity = TransactionEntity(
-                    id = UUID.randomUUID().toString(),
-                    amount = obj.optDouble("amount", 0.0),
-                    type = obj.optString("entryType", "Debit"),
-                    category = obj.optString("category", "General"),
-                    note = noteData.toString(),
-                    createdAt = parseDateToLong(obj.optString("date", "")),
-                    updatedAt = System.currentTimeMillis(),
-                    deleted = false,
-                    syncPending = true
+                val newTransaction = Transaction(
+                    id = null,
+                    date = obj.optString("date", ""),
+                    entryType = obj.optString("entryType", "Debit"),
+                    amount = BigDecimal(obj.optDouble("amount", 0.0).toString()),
+                    category = obj.optString("category", ""),
+                    expenseType = obj.optString("expenseType", ""),
+                    paidTo = obj.optString("paidTo", ""),
+                    notes = obj.optString("notes", "")
                 )
 
-                repository.insertTransaction(entity)
+                val added = transactionService.addTransaction(newTransaction)
+                Log.d("AndroidBridge", "addTransaction status: success, new id: ${added?.id}")
 
                 val response = JSONObject()
                 response.put("status", "ok")
@@ -137,28 +90,23 @@ class AndroidBridge(private val repository: LocalRepository) {
         return runBlocking {
             try {
                 val obj = JSONObject(transactionJson)
-
-                val noteData = JSONObject()
-                noteData.put("notes", obj.optString("notes", ""))
-                noteData.put("expenseType", obj.optString("expenseType", ""))
-                noteData.put("paidTo", obj.optString("paidTo", ""))
-
-                val entity = TransactionEntity(
-                    id = id,
-                    amount = obj.optDouble("amount", 0.0),
-                    type = obj.optString("entryType", "Debit"),
-                    category = obj.optString("category", "General"),
-                    note = noteData.toString(),
-                    createdAt = parseDateToLong(obj.optString("date", "")),
-                    updatedAt = System.currentTimeMillis(),
-                    deleted = false,
-                    syncPending = true
+                val updatedTransaction = Transaction(
+                    id = id.toInt(),
+                    date = obj.optString("date", ""),
+                    entryType = obj.optString("entryType", "Debit"),
+                    amount = BigDecimal(obj.optDouble("amount", 0.0).toString()),
+                    category = obj.optString("category", ""),
+                    expenseType = obj.optString("expenseType", ""),
+                    paidTo = obj.optString("paidTo", ""),
+                    notes = obj.optString("notes", "")
                 )
 
-                repository.updateTransaction(entity)
+                val success = transactionService.updateTransaction(id.toInt(), updatedTransaction)
+                Log.d("AndroidBridge", "updateTransaction status: $success")
 
                 val response = JSONObject()
-                response.put("status", "ok")
+                response.put("status", if (success) "ok" else "error")
+                if (!success) response.put("error", "Failed to update record")
                 response.toString()
             } catch (e: Exception) {
                 Log.e("AndroidBridge", "updateTransaction error", e)
@@ -175,9 +123,12 @@ class AndroidBridge(private val repository: LocalRepository) {
         Log.d("AndroidBridge", "deleteTransaction called: $id")
         return runBlocking {
             try {
-                repository.softDeleteTransaction(id)
+                val success = transactionService.deleteTransaction(id.toInt())
+                Log.d("AndroidBridge", "deleteTransaction status: $success")
+
                 val response = JSONObject()
-                response.put("status", "ok")
+                response.put("status", if (success) "ok" else "error")
+                if (!success) response.put("error", "Failed to delete record")
                 response.toString()
             } catch (e: Exception) {
                 Log.e("AndroidBridge", "deleteTransaction error", e)

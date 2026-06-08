@@ -67,5 +67,6 @@ dependencies {
 
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(project(":backend"))
     ksp(libs.room.compiler)
 }
