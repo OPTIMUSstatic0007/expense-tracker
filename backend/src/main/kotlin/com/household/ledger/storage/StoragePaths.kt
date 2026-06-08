@@ -1,10 +1,15 @@
 package com.household.ledger.storage
 
 import java.io.File
+import org.slf4j.LoggerFactory
 
 object StoragePaths {
+    private val logger = LoggerFactory.getLogger(StoragePaths::class.java)
+
+    var customDataDir: File? = null
+
     private val projectRoot: File by lazy {
-        findProjectRoot(File(System.getProperty("user.dir")).absoluteFile)
+        findProjectRoot(File(System.getProperty("user.dir") ?: "").absoluteFile)
     }
 
     private val backendModuleDir: File by lazy {
@@ -13,7 +18,13 @@ object StoragePaths {
 
     // Historical canonical root: <repo>/backend/backend/data.
     val dataDir: File by lazy {
-        File(backendModuleDir, "backend/data").ensureDirectory()
+        if (customDataDir != null) {
+            logger.info("StoragePaths: Using custom Android data directory: ${customDataDir!!.absolutePath}")
+            customDataDir!!.ensureDirectory()
+        } else {
+            logger.info("StoragePaths: Using fallback desktop backend data directory.")
+            File(backendModuleDir, "backend/data").ensureDirectory()
+        }
     }
 
     val databaseFile: File by lazy {

@@ -1,7 +1,9 @@
 # Phase 2A: Offline Bridge Layer for Transactions (REFINED)
 
 ## Canonical DB Path
-The transaction database used by the entire system (backend APIs, ledger aggregation engine, backup engine) is an Exposed-managed SQLite database located at `backend/backend/data/ledger.db`. The Android bridge has been realigned to target this EXACT database.
+The transaction database used by the entire system (backend APIs, ledger aggregation engine, backup engine) is an Exposed-managed SQLite database.
+By default, the backend resolves this to `backend/backend/data/ledger.db` on the desktop filesystem.
+In the Android runtime sandbox, `StoragePaths.kt` allows intercepting this path to securely mount the canonical database natively within Android's internal application storage (`context.filesDir/ledger_data/ledger.db`). This prevents filesystem crash exceptions on app launch.
 
 ## JS Bridge Calls
 The frontend asset (`app.js`) interacts with the native Android layer via `window.AndroidBridge` using the following JavascriptInterface methods:

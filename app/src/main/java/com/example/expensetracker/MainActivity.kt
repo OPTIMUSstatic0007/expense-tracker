@@ -53,6 +53,8 @@ import com.example.expensetracker.auth.GoogleAuthManager
 import com.household.ledger.database.DatabaseFactory
 import com.household.ledger.database.TransactionService
 import com.example.expensetracker.bridge.AndroidBridge
+import com.household.ledger.storage.StoragePaths
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     
@@ -225,7 +227,13 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
                     settings.allowFileAccessFromFileURLs = true
                     settings.allowUniversalAccessFromFileURLs = true
 
+                    // Set custom path to Android internal storage BEFORE DB INIT
+                    val internalDbDir = File(context.filesDir, "ledger_data")
+                    StoragePaths.customDataDir = internalDbDir
+                    Log.d("ExpenseTracker", "Resolved Android DB Path: ${internalDbDir.absolutePath}")
+
                     DatabaseFactory.init()
+                    Log.d("ExpenseTracker", "Database initialized successfully at ${StoragePaths.databaseFile.absolutePath}")
                     val transactionService = TransactionService()
                     addJavascriptInterface(AndroidBridge(transactionService), "AndroidBridge")
 
