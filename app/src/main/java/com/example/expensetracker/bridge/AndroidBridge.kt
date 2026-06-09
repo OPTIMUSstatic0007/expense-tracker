@@ -15,22 +15,38 @@ import java.util.Locale
 
 class AndroidBridge(private val repository: LocalRepository) {
 
-    private fun parseDateToLong(dateStr: String): Long {
+    private fun parseDateToLong(dateStr: String, preserveTimeFrom: Long? = null): Long {
         try {
+            val now = Calendar.getInstance()
+            if (preserveTimeFrom != null) {
+                now.timeInMillis = preserveTimeFrom
+            }
+
             if (dateStr.contains("-")) {
                 val parts = dateStr.split("-")
                 if (parts.size == 3) {
                     val cal = Calendar.getInstance()
-                    cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt(), 0, 0, 0)
-                    cal.set(Calendar.MILLISECOND, 0)
+                    cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt(), now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), now.get(Calendar.SECOND))
+                    cal.set(Calendar.MILLISECOND, now.get(Calendar.MILLISECOND))
+                    // Ensure sequential ordering by adding a slight offset for identical timestamps
+                    if (preserveTimeFrom == null) {
+                        Thread.sleep(1) // Ensure distinct ms
+                        val msPassed = System.currentTimeMillis() - now.timeInMillis
+                        return cal.timeInMillis + msPassed
+                    }
                     return cal.timeInMillis
                 }
             } else {
                 val parts = dateStr.split("/")
                 if (parts.size == 3) {
                     val cal = Calendar.getInstance()
-                    cal.set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt(), 0, 0, 0)
-                    cal.set(Calendar.MILLISECOND, 0)
+                    cal.set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt(), now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), now.get(Calendar.SECOND))
+                    cal.set(Calendar.MILLISECOND, now.get(Calendar.MILLISECOND))
+                    if (preserveTimeFrom == null) {
+                        Thread.sleep(1) // Ensure distinct ms
+                        val msPassed = System.currentTimeMillis() - now.timeInMillis
+                        return cal.timeInMillis + msPassed
+                    }
                     return cal.timeInMillis
                 }
             }
@@ -181,7 +197,7 @@ class AndroidBridge(private val repository: LocalRepository) {
                         type = obj.optString("entryType", "Debit"),
                         category = obj.optString("category", "General"),
                         note = noteData.toString(),
-                        createdAt = parseDateToLong(obj.optString("date", "")),
+                        createdAt = parseDateToLong(obj.optString("date", ""), existingEntity.createdAt),
                         updatedAt = System.currentTimeMillis(),
                         deleted = existingEntity.deleted,
                         syncPending = true
