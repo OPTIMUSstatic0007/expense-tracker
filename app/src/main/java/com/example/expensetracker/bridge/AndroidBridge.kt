@@ -39,7 +39,7 @@ class AndroidBridge(private val repository: LocalRepository) {
     fun getTransactions(page: Int, limit: Int): String {
         Log.d("AndroidBridge", "getTransactions called page=$page limit=$limit")
         return runBlocking {
-            val entities = repository.getAllTransactions().first()
+            val entities = repository.getAllTransactions().first().filter { !it.deleted }
             val sortedEntities = entities.sortedByDescending { it.createdAt }
 
             val startIndex = (page - 1) * limit
@@ -49,6 +49,23 @@ class AndroidBridge(private val repository: LocalRepository) {
                 sortedEntities.subList(startIndex, endIndex)
             } else {
                 emptyList()
+            }
+
+            var globalBalance = 0.0
+            var totalCredit = 0.0
+            var totalDebit = 0.0
+
+            val reversedEntities = sortedEntities.reversed()
+            val balances = mutableMapOf<String, Double>()
+            for (entity in reversedEntities) {
+                if (entity.type == "Credit") {
+                    globalBalance += entity.amount
+                    totalCredit += entity.amount
+                } else {
+                    globalBalance -= entity.amount
+                    totalDebit += entity.amount
+                }
+                balances[entity.id] = globalBalance
             }
 
             val jsonArray = JSONArray()
@@ -78,8 +95,7 @@ class AndroidBridge(private val repository: LocalRepository) {
                 obj.put("paidTo", paidTo)
                 obj.put("notes", notes)
 
-                // Keep balanceAfter 0 for now as it might be calculated in JS, or we provide it
-                obj.put("balanceAfter", 0.0)
+                obj.put("balanceAfter", balances[entity.id] ?: 0.0)
 
                 jsonArray.put(obj)
             }
@@ -87,6 +103,9 @@ class AndroidBridge(private val repository: LocalRepository) {
             val result = JSONObject()
             result.put("transactions", jsonArray)
             result.put("hasMore", endIndex < sortedEntities.size)
+            result.put("globalBalance", globalBalance)
+            result.put("totalCredit", totalCredit)
+            result.put("totalDebit", totalDebit)
 
             result.toString()
         }
