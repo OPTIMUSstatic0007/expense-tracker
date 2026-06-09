@@ -9,7 +9,13 @@ class LocalRepository(private val transactionDao: TransactionDao) {
     suspend fun insertTransaction(transaction: TransactionEntity) {
         kotlinx.coroutines.Dispatchers.IO.let {
             kotlinx.coroutines.withContext(it) {
-                transactionDao.insertTransaction(transaction)
+                val entityToInsert = if (transaction.sequenceId == 0L) {
+                    val maxSeq = transactionDao.getMaxSequenceId() ?: 0L
+                    transaction.copy(sequenceId = maxSeq + 1L)
+                } else {
+                    transaction
+                }
+                transactionDao.insertTransaction(entityToInsert)
             }
         }
     }

@@ -200,7 +200,8 @@ class AndroidBridge(private val repository: LocalRepository) {
                         createdAt = parseDateToLong(obj.optString("date", ""), existingEntity.createdAt),
                         updatedAt = System.currentTimeMillis(),
                         deleted = existingEntity.deleted,
-                        syncPending = true
+                        syncPending = true,
+                        sequenceId = existingEntity.sequenceId
                     )
                     repository.updateTransaction(entity)
                 } else {

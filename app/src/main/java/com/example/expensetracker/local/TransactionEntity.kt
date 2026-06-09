@@ -3,7 +3,12 @@ package com.example.expensetracker.local
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "transactions")
+import androidx.room.Index
+
+@Entity(
+    tableName = "transactions",
+    indices = [Index("sequenceId")]
+)
 data class TransactionEntity(
     @PrimaryKey
     val id: String,
@@ -14,5 +19,6 @@ data class TransactionEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val deleted: Boolean,
-    val syncPending: Boolean
+    val syncPending: Boolean,
+    val sequenceId: Long = 0L
 )
