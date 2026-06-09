@@ -273,7 +273,12 @@ function ensureFormIn(target) {
 /** Fills form fields for create or edit mode. */
 function populateForm(mode, data) {
     if (mode === 'edit' && data) {
-        document.getElementById('date').value     = data.date;
+        let formattedDate = data.date;
+        if (formattedDate && formattedDate.includes('/')) {
+            const [day, month, year] = formattedDate.split('/');
+            formattedDate = `${year}-${month}-${day}`;
+        }
+        document.getElementById('date').value     = formattedDate;
         document.getElementById('type').value     = data.entryType;
         document.getElementById('amount').value   = data.amount;
         document.getElementById('category').value = data.category;
@@ -937,7 +942,7 @@ async function deleteTransaction(id) {
 }
 
 function editTransaction(id) {
-    const t = transactions.find(x => x.id === id);
+    const t = transactions.find(x => String(x.id) === String(id));
     if (!t) return;
     // Mobile: expand inline form with prefilled data
     // Desktop: open overlay modal as before

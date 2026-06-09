@@ -17,12 +17,22 @@ class AndroidBridge(private val repository: LocalRepository) {
 
     private fun parseDateToLong(dateStr: String): Long {
         try {
-            val parts = dateStr.split("/")
-            if (parts.size == 3) {
-                val cal = Calendar.getInstance()
-                cal.set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt(), 0, 0, 0)
-                cal.set(Calendar.MILLISECOND, 0)
-                return cal.timeInMillis
+            if (dateStr.contains("-")) {
+                val parts = dateStr.split("-")
+                if (parts.size == 3) {
+                    val cal = Calendar.getInstance()
+                    cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt(), 0, 0, 0)
+                    cal.set(Calendar.MILLISECOND, 0)
+                    return cal.timeInMillis
+                }
+            } else {
+                val parts = dateStr.split("/")
+                if (parts.size == 3) {
+                    val cal = Calendar.getInstance()
+                    cal.set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt(), 0, 0, 0)
+                    cal.set(Calendar.MILLISECOND, 0)
+                    return cal.timeInMillis
+                }
             }
         } catch (e: Exception) {
             Log.e("AndroidBridge", "Error parsing date: $dateStr", e)
@@ -31,7 +41,7 @@ class AndroidBridge(private val repository: LocalRepository) {
     }
 
     private fun formatDate(timestamp: Long): String {
-        val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         return sdf.format(timestamp)
     }
 
@@ -162,19 +172,24 @@ class AndroidBridge(private val repository: LocalRepository) {
                 noteData.put("expenseType", obj.optString("expenseType", ""))
                 noteData.put("paidTo", obj.optString("paidTo", ""))
 
-                val entity = TransactionEntity(
-                    id = id,
-                    amount = obj.optDouble("amount", 0.0),
-                    type = obj.optString("entryType", "Debit"),
-                    category = obj.optString("category", "General"),
-                    note = noteData.toString(),
-                    createdAt = parseDateToLong(obj.optString("date", "")),
-                    updatedAt = System.currentTimeMillis(),
-                    deleted = false,
-                    syncPending = true
-                )
+                val existingEntity = repository.getAllTransactions().first().find { it.id == id }
 
-                repository.updateTransaction(entity)
+                if (existingEntity != null) {
+                    val entity = TransactionEntity(
+                        id = id,
+                        amount = obj.optDouble("amount", 0.0),
+                        type = obj.optString("entryType", "Debit"),
+                        category = obj.optString("category", "General"),
+                        note = noteData.toString(),
+                        createdAt = parseDateToLong(obj.optString("date", "")),
+                        updatedAt = System.currentTimeMillis(),
+                        deleted = existingEntity.deleted,
+                        syncPending = true
+                    )
+                    repository.updateTransaction(entity)
+                } else {
+                    throw Exception("Transaction not found")
+                }
 
                 val response = JSONObject()
                 response.put("status", "ok")
