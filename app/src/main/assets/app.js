@@ -768,8 +768,8 @@ function renderTable(data) {
                             </div>
                         </div>
                         <div class="details-actions">
-                            <button class="btn-action-mobile" onclick="event.stopPropagation(); editTransaction(${t.id})">Edit Entry</button>
-                            <button class="btn-action-mobile" onclick="event.stopPropagation(); deleteTransaction(${t.id})">Delete</button>
+                            <button class="btn-action-mobile" onclick="event.stopPropagation(); editTransaction('${t.id}')">Edit Entry</button>
+                            <button class="btn-action-mobile" onclick="event.stopPropagation(); deleteTransaction('${t.id}')">Delete</button>
                         </div>
                     </div>
                 </td>
@@ -793,8 +793,8 @@ function renderTable(data) {
                 <td data-label="Balance" class="text-right" style="font-weight: 600;">${parseFloat(t.balanceAfter).toFixed(2)}</td>
                 <td data-label="Actions" class="text-center">
                     <div class="action-buttons">
-                        <button class="btn-action btn-edit" onclick="editTransaction(${t.id})">Edit</button>
-                        <button class="btn-action btn-delete" onclick="deleteTransaction(${t.id})">Del</button>
+                        <button class="btn-action btn-edit" onclick="editTransaction('${t.id}')">Edit</button>
+                        <button class="btn-action btn-delete" onclick="deleteTransaction('${t.id}')">Del</button>
                     </div>
                 </td>
             `;
@@ -805,9 +805,12 @@ function renderTable(data) {
 
 function updateDashboard(filtered, selMonth, selYear, pagedData = null) {
     if (pagedData) {
-        balanceEl.innerText = currencyFormatter.format(pagedData.globalBalance);
-        creditEl.innerText = currencyFormatter.format(pagedData.totalCredit);
-        debitEl.innerText = currencyFormatter.format(pagedData.totalDebit);
+        const globalBalance = (pagedData.globalBalance === undefined || isNaN(pagedData.globalBalance)) ? 0.00 : pagedData.globalBalance;
+        const totalCredit = (pagedData.totalCredit === undefined || isNaN(pagedData.totalCredit)) ? 0.00 : pagedData.totalCredit;
+        const totalDebit = (pagedData.totalDebit === undefined || isNaN(pagedData.totalDebit)) ? 0.00 : pagedData.totalDebit;
+        balanceEl.innerText = currencyFormatter.format(globalBalance || 0);
+        creditEl.innerText = currencyFormatter.format(totalCredit || 0);
+        debitEl.innerText = currencyFormatter.format(totalDebit || 0);
     }
 
     if (filtered) {

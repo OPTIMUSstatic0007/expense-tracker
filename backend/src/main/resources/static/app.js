@@ -575,9 +575,15 @@ async function loadTransactions(append = false) {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}?page=${currentPage}&limit=30`);
-        if (!response.ok) throw new Error('Fetch failed');
-        const data = await response.json();
+        let data;
+        if (window.AndroidBridge) {
+            const bridgeData = window.AndroidBridge.getTransactions(currentPage, 30);
+            data = JSON.parse(bridgeData);
+        } else {
+            const response = await fetch(`${API_BASE_URL}?page=${currentPage}&limit=30`);
+            if (!response.ok) throw new Error('Fetch failed');
+            data = await response.json();
+        }
 
         if (append) {
             transactions = [...transactions, ...data.transactions];
@@ -762,8 +768,8 @@ function renderTable(data) {
                             </div>
                         </div>
                         <div class="details-actions">
-                            <button class="btn-action-mobile" onclick="event.stopPropagation(); editTransaction(${t.id})">Edit Entry</button>
-                            <button class="btn-action-mobile" onclick="event.stopPropagation(); deleteTransaction(${t.id})">Delete</button>
+                            <button class="btn-action-mobile" onclick="event.stopPropagation(); editTransaction('${t.id}')">Edit Entry</button>
+                            <button class="btn-action-mobile" onclick="event.stopPropagation(); deleteTransaction('${t.id}')">Delete</button>
                         </div>
                     </div>
                 </td>
@@ -787,8 +793,8 @@ function renderTable(data) {
                 <td data-label="Balance" class="text-right" style="font-weight: 600;">${parseFloat(t.balanceAfter).toFixed(2)}</td>
                 <td data-label="Actions" class="text-center">
                     <div class="action-buttons">
-                        <button class="btn-action btn-edit" onclick="editTransaction(${t.id})">Edit</button>
-                        <button class="btn-action btn-delete" onclick="deleteTransaction(${t.id})">Del</button>
+                        <button class="btn-action btn-edit" onclick="editTransaction('${t.id}')">Edit</button>
+                        <button class="btn-action btn-delete" onclick="deleteTransaction('${t.id}')">Del</button>
                     </div>
                 </td>
             `;
@@ -799,9 +805,12 @@ function renderTable(data) {
 
 function updateDashboard(filtered, selMonth, selYear, pagedData = null) {
     if (pagedData) {
-        balanceEl.innerText = currencyFormatter.format(pagedData.globalBalance);
-        creditEl.innerText = currencyFormatter.format(pagedData.totalCredit);
-        debitEl.innerText = currencyFormatter.format(pagedData.totalDebit);
+        const globalBalance = (pagedData.globalBalance === undefined || isNaN(pagedData.globalBalance)) ? 0.00 : pagedData.globalBalance;
+        const totalCredit = (pagedData.totalCredit === undefined || isNaN(pagedData.totalCredit)) ? 0.00 : pagedData.totalCredit;
+        const totalDebit = (pagedData.totalDebit === undefined || isNaN(pagedData.totalDebit)) ? 0.00 : pagedData.totalDebit;
+        balanceEl.innerText = currencyFormatter.format(globalBalance || 0);
+        creditEl.innerText = currencyFormatter.format(totalCredit || 0);
+        debitEl.innerText = currencyFormatter.format(totalDebit || 0);
     }
 
     if (filtered) {
@@ -853,21 +862,41 @@ if (form) {
             notes: document.getElementById('notes').value
         };
         try {
-            const response = await fetch(editingId ? `${API_BASE_URL}/${editingId}` : API_BASE_URL, {
-                method: editingId ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (response.ok) {
-                showToast(editingId ? 'Entry updated' : 'Entry added');
-                // Close whichever surface is active
-                if (isMobile()) { closeMobileForm(); } else { closeModal(); }
-                currentPage = 1;
-                loadTransactions();
-                updateBackupStatus();
+            if (window.AndroidBridge) {
+                let bridgeRes;
+                if (editingId) {
+                    bridgeRes = window.AndroidBridge.updateTransaction(editingId.toString(), JSON.stringify(data));
+                } else {
+                    bridgeRes = window.AndroidBridge.addTransaction(JSON.stringify(data));
+                }
+
+                const responseData = JSON.parse(bridgeRes);
+                if (responseData.status === 'ok') {
+                    showToast(editingId ? 'Entry updated' : 'Entry added');
+                    if (isMobile()) { closeMobileForm(); } else { closeModal(); }
+                    currentPage = 1;
+                    loadTransactions();
+                    updateBackupStatus();
+                } else {
+                    showToast('Save failed: ' + responseData.error, 'error');
+                }
             } else {
-                const err = await response.text();
-                showToast('Save failed: ' + (err || 'Server error'), 'error');
+                const response = await fetch(editingId ? `${API_BASE_URL}/${editingId}` : API_BASE_URL, {
+                    method: editingId ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    showToast(editingId ? 'Entry updated' : 'Entry added');
+                    // Close whichever surface is active
+                    if (isMobile()) { closeMobileForm(); } else { closeModal(); }
+                    currentPage = 1;
+                    loadTransactions();
+                    updateBackupStatus();
+                } else {
+                    const err = await response.text();
+                    showToast('Save failed: ' + (err || 'Server error'), 'error');
+                }
             }
         } catch (e) {
             showToast('Error saving data', 'error');
@@ -879,15 +908,28 @@ if (form) {
 async function deleteTransaction(id) {
     if (!confirm('Delete this entry?')) return;
     try {
-        const response = await fetch(`${API_BASE_URL}/${id}`, { method: 'DELETE' });
-        if (response.ok) {
-            showToast('Deleted');
-            currentPage = 1;
-            loadTransactions();
-            updateBackupStatus();
+        if (window.AndroidBridge) {
+            const bridgeRes = window.AndroidBridge.deleteTransaction(id.toString());
+            const responseData = JSON.parse(bridgeRes);
+            if (responseData.status === 'ok') {
+                showToast('Deleted');
+                currentPage = 1;
+                loadTransactions();
+                updateBackupStatus();
+            } else {
+                showToast('Delete failed: ' + responseData.error, 'error');
+            }
         } else {
-            const err = await response.text();
-            showToast('Delete failed: ' + (err || 'Server error'), 'error');
+            const response = await fetch(`${API_BASE_URL}/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                showToast('Deleted');
+                currentPage = 1;
+                loadTransactions();
+                updateBackupStatus();
+            } else {
+                const err = await response.text();
+                showToast('Delete failed: ' + (err || 'Server error'), 'error');
+            }
         }
     } catch (e) {
         showToast('Delete failed', 'error');
