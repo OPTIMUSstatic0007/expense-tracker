@@ -50,7 +50,7 @@ class AndroidBridge(private val repository: LocalRepository) {
         Log.d("AndroidBridge", "getTransactions called page=$page limit=$limit")
         return runBlocking {
             val entities = repository.getAllTransactions().first().filter { !it.deleted }
-            val sortedEntities = entities.sortedWith(compareByDescending<com.example.expensetracker.local.TransactionEntity> { it.createdAt }.thenByDescending { it.updatedAt })
+            val sortedEntities = entities
 
             val startIndex = (page - 1) * limit
             val endIndex = minOf(startIndex + limit, sortedEntities.size)
