@@ -4,12 +4,12 @@ import com.household.ledger.models.Transaction
 import com.household.ledger.database.DatabaseFactory.dbQuery
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.slf4j.LoggerFactory
+import com.household.ledger.utils.AppLogger
 import java.math.BigDecimal
 import java.math.RoundingMode
 
 class TransactionService {
-    private val logger = LoggerFactory.getLogger(TransactionService::class.java)
+
     private fun normalize(value: BigDecimal): BigDecimal = value.setScale(2, RoundingMode.HALF_UP)
 
     suspend fun getAllTransactions(): List<Transaction> = dbQuery {
@@ -57,19 +57,19 @@ class TransactionService {
         val firstRow = Transactions.selectAll().orderBy(Transactions.date to SortOrder.ASC, Transactions.id to SortOrder.ASC).limit(1).singleOrNull()
         val lastRow = Transactions.selectAll().orderBy(Transactions.date to SortOrder.DESC, Transactions.id to SortOrder.DESC).limit(1).singleOrNull()
         
-        logger.info("--- Ledger Aggregation Engine ---")
-        logger.info("Transaction Count: $count")
-        logger.info("Canonical Start Balance (Oldest): ${firstRow?.get(Transactions.balanceAfter)}")
-        logger.info("Canonical End Balance (Newest): ${lastRow?.get(Transactions.balanceAfter)}")
-        logger.info("Computed Final Balance: $latestBalance")
-        logger.info("Detected Sort Order for Aggregation: chronologically consistent")
-        logger.info("----------------------------------")
+        AppLogger.info("TransactionService", "--- Ledger Aggregation Engine ---")
+        AppLogger.info("TransactionService", "Transaction Count: $count")
+        AppLogger.info("TransactionService", "Canonical Start Balance (Oldest): ${firstRow?.get(Transactions.balanceAfter)}")
+        AppLogger.info("TransactionService", "Canonical End Balance (Newest): ${lastRow?.get(Transactions.balanceAfter)}")
+        AppLogger.info("TransactionService", "Computed Final Balance: $latestBalance")
+        AppLogger.info("TransactionService", "Detected Sort Order for Aggregation: chronologically consistent")
+        AppLogger.info("TransactionService", "----------------------------------")
 
         Triple(normalize(latestBalance), normalize(totalCredit), normalize(totalDebit))
     }
 
     suspend fun addTransaction(transaction: Transaction): Transaction? = dbQuery {
-        logger.info("Transaction mutation received: ADD")
+        AppLogger.info("TransactionService", "Transaction mutation received: ADD")
         val amountNormalized = normalize(transaction.amount)
         val insertStatement = Transactions.insert {
             it[date] = transaction.date
@@ -92,7 +92,7 @@ class TransactionService {
     }
 
     suspend fun updateTransaction(id: Int, transaction: Transaction): Boolean = dbQuery {
-        logger.info("Transaction mutation received: UPDATE | ID: $id")
+        AppLogger.info("TransactionService", "Transaction mutation received: UPDATE | ID: $id")
         val amountNormalized = normalize(transaction.amount)
         val updated = Transactions.update({ Transactions.id eq id }) {
             it[date] = transaction.date
@@ -111,7 +111,7 @@ class TransactionService {
     }
 
     suspend fun deleteTransaction(id: Int): Boolean = dbQuery {
-        logger.info("Transaction mutation received: DELETE | ID: $id")
+        AppLogger.info("TransactionService", "Transaction mutation received: DELETE | ID: $id")
         val deleted = Transactions.deleteWhere { Transactions.id eq id } > 0
         if (deleted) {
             performRecalculation()
@@ -145,7 +145,7 @@ class TransactionService {
                 it[balanceAfter] = normalize(currentBalance)
             }
         }
-        logger.info("SQLite write successful: Ledger balances updated")
+        AppLogger.info("TransactionService", "SQLite write successful: Ledger balances updated")
     }
 
     private fun rowToTransaction(row: ResultRow) = Transaction(

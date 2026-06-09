@@ -33,3 +33,7 @@ Although the transaction operations (CRUD) bypass the `127.0.0.1:8080` backend, 
 - Analytics/Charts: `/transactions/all`
 - Sync/Backup APIs: `/backup/status`, `/backup/snapshot`, `/restore/database`, etc.
 - Export APIs: `/export/csv`, `/export/json`, `/export/excel`
+
+
+## Logging Strategy
+To prevent Android runtime crashes caused by JVM-only logging frameworks (`logback-classic`, `slf4j` reflection), the backend components utilize a lightweight platform-aware abstraction (`AppLogger.kt`). On Android, logs fallback safely to `System.out.println` (captured by Logcat), bypassing `org.slf4j.LoggerFactory` entirely.
