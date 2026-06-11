@@ -182,21 +182,38 @@ function setupEventListeners() {
             backupStatusEl.className = 'status-working';
         }
         try {
-            const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
-            if (response.ok) {
-                if (backupStatusEl) {
-                    backupStatusEl.innerText = 'Restore Point Created';
-                    backupStatusEl.className = 'status-manual';
+            if (window.AndroidBridge && typeof window.AndroidBridge.backupDatabase === 'function') {
+                const responseJson = window.AndroidBridge.backupDatabase();
+                const response = JSON.parse(responseJson);
+                if (response.status === 'success') {
+                    if (backupStatusEl) {
+                        backupStatusEl.innerText = 'Restore Point Created';
+                        backupStatusEl.className = 'status-manual';
+                    }
+                    showToast(response.message || 'Manual restore point created');
+                    if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
+                    if (typeof refreshAvailableBackups === 'function') refreshAvailableBackups();
+                } else {
+                    showToast(response.message || 'Failed to create snapshot', 'error');
+                    if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
                 }
-                showToast('Manual restore point created');
-                setTimeout(updateBackupStatus, 2000);
             } else {
-                showToast('Failed to create snapshot', 'error');
-                updateBackupStatus();
+                const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
+                if (response.ok) {
+                    if (backupStatusEl) {
+                        backupStatusEl.innerText = 'Restore Point Created';
+                        backupStatusEl.className = 'status-manual';
+                    }
+                    showToast('Manual restore point created');
+                    if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
+                } else {
+                    showToast('Failed to create snapshot', 'error');
+                    if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
+                }
             }
         } catch (e) {
-            showToast('Network error', 'error');
-            updateBackupStatus();
+            showToast('Network error or exception', 'error');
+            if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
         } finally {
             setLoading(snapshotBtn, false, 'Create Restore Point');
         }
@@ -205,13 +222,7 @@ function setupEventListeners() {
     if (backupBtn) backupBtn.addEventListener('click', () => {
         showToast('Preparing database backup...', 'info');
         window.location.href = `${BACKUP_BASE_URL}/database`;
-        setTimeout(updateBackupStatus, 2000);
-    });
-
-    if (restoreBtn) restoreBtn.addEventListener('click', () => restoreInput.click());
-
-    if (restoreInput) restoreInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) handleRestore(e.target.files[0]);
+        setTimeout(() => { if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics(); }, 2000);
     });
 
     // FAB — branches on viewport: inline form on mobile, overlay modal on desktop

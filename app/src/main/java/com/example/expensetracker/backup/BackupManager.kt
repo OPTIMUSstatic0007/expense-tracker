@@ -8,6 +8,7 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.util.Log
 
 class BackupManager(
     private val context: Context,
@@ -24,9 +25,11 @@ class BackupManager(
     }
 
     fun createBackup(type: BackupType): BackupResult {
+        Log.d("BackupManager", "createBackup called with type: ${type.name}")
         return try {
             val dbFile = context.getDatabasePath(DB_NAME)
             if (!dbFile.exists()) {
+                Log.e("BackupManager", "Backup failed: Database file not found at ${dbFile.absolutePath}")
                 return BackupResult.Failure("Database file not found at ${dbFile.absolutePath}")
             }
 
@@ -34,6 +37,7 @@ class BackupManager(
             val typeDir = File(backupsDir, type.name.lowercase(Locale.getDefault()))
 
             if (!typeDir.exists() && !typeDir.mkdirs()) {
+                 Log.e("BackupManager", "Backup failed: Failed to create backup directory ${typeDir.absolutePath}")
                  return BackupResult.Failure("Failed to create backup directory ${typeDir.absolutePath}")
             }
 
@@ -55,6 +59,7 @@ class BackupManager(
 
             // 3. Validate
             if (!validateBackup(dbFile, mainDbCopy, walCopy, shmCopy)) {
+                Log.e("BackupManager", "Backup failed: Backup validation failed for $baseBackupName")
                 return BackupResult.Failure("Backup validation failed")
             }
 
@@ -69,12 +74,15 @@ class BackupManager(
                 shmSize = shmCopy?.length()
             )
 
+            Log.d("BackupManager", "${type.name.lowercase(Locale.getDefault())} backup created: $baseBackupName")
+
             BackupResult.Success(
                 backupFileName = baseBackupName,
                 backupPath = mainDbCopy.absolutePath,
                 timestamp = timestamp
             )
         } catch (e: Exception) {
+            Log.e("BackupManager", "Backup failed with exception: ${e.message}", e)
             BackupResult.Failure("Backup failed: ${e.message}")
         }
     }

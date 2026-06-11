@@ -26,15 +26,18 @@ class AndroidBridge(
 
     @JavascriptInterface
     fun backupDatabase(): String {
+        Log.d("AndroidBridge", "createRestorePoint (backupDatabase) called")
         val result = backupManager.createBackup(BackupType.MANUAL)
         val response = JSONObject()
         if (result is BackupResult.Success) {
-            response.put("success", true)
+            response.put("status", "success")
+            response.put("message", "Restore point created")
             response.put("backupPath", result.backupPath)
             response.put("backupFile", result.backupFileName)
             response.put("timestamp", result.timestamp)
         } else if (result is BackupResult.Failure) {
-            response.put("success", false)
+            Log.e("AndroidBridge", "Manual backup failed: ${result.errorMessage}")
+            response.put("status", "error")
             response.put("message", result.errorMessage)
         }
         return response.toString()
@@ -350,6 +353,7 @@ class AndroidBridge(
         Log.d("AndroidBridge", "getAvailableBackups called")
         return try {
             val backups = restoreManager.getAvailableBackups()
+            Log.d("AndroidBridge", "Found ${backups.size} available backups")
             val jsonArray = JSONArray()
             for (backup in backups) {
                 val obj = JSONObject()
@@ -373,8 +377,11 @@ class AndroidBridge(
         return try {
             val success = restoreManager.restoreDatabase(fileName)
             if (success) {
+                Log.d("AndroidBridge", "Restore successfully completed for: $fileName")
                 response.put("status", "success")
+                response.put("message", "Database successfully restored")
             } else {
+                Log.e("AndroidBridge", "Restore failed for: $fileName")
                 response.put("status", "error")
                 response.put("message", "Restore failed during validation or file replacement.")
             }
