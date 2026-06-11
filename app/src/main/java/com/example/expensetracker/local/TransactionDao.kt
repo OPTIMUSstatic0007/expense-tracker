@@ -26,4 +26,19 @@ interface TransactionDao {
 
     @Query("SELECT MAX(sequenceId) FROM transactions")
     fun getMaxSequenceId(): Long?
+
+    /**
+     * Returns the count of non-deleted transactions synchronously.
+     * Used by LegacyImportEngine inside database.runInTransaction{} — MUST be non-suspending.
+     */
+    @Query("SELECT COUNT(*) FROM transactions WHERE deleted = 0")
+    fun getActiveTransactionCountSync(): Int
+
+    /**
+     * Returns sequenceIds of all non-deleted transactions ordered by createdAt ASC.
+     * Used by Gate 3 validation to prove createdAt ordering == legacy date ASC, id ASC ordering.
+     * MUST be non-suspending — called inside database.runInTransaction{}.
+     */
+    @Query("SELECT sequenceId FROM transactions WHERE deleted = 0 ORDER BY createdAt ASC")
+    fun getSequenceIdsByCreatedAtAsc(): List<Long>
 }

@@ -434,6 +434,79 @@ function setupNavDrawer() {
         });
     }
 
+    // 5. Import Legacy Data — only visible on Android bridge + not yet imported
+    const drawerImportBtn = document.getElementById('drawer-import-legacy-btn');
+    if (drawerImportBtn && window.AndroidBridge) {
+        // Check import status first — reveal button only if not yet done
+        try {
+            const statusRaw = window.AndroidBridge.checkImportStatus();
+            const status = JSON.parse(statusRaw);
+            if (!status.imported) {
+                drawerImportBtn.classList.remove('hidden');
+            }
+        } catch (e) {
+            // If status check fails, leave button hidden — safe default
+            console.warn('Import status check failed:', e);
+        }
+
+        drawerImportBtn.addEventListener('click', async () => {
+            const textEl  = document.getElementById('import-legacy-btn-text');
+            const loader  = document.getElementById('import-legacy-loader');
+            const origText = 'Import Legacy Data';
+
+            if (!confirm('Import 64 historical records from the legacy ledger?\n\nThis action is one-time and cannot be undone. The database must be empty.')) {
+                return;
+            }
+
+            drawerImportBtn.disabled = true;
+            if (textEl) textEl.innerText = 'Importing...';
+            if (loader) loader.classList.remove('hidden');
+
+            try {
+                const resultRaw = window.AndroidBridge.importLegacyDatabase();
+                const result = JSON.parse(resultRaw);
+
+                switch (result.status) {
+                    case 'success':
+                        showToast(`Import complete: ${result.importedCount} records, balance ₹${parseFloat(result.finalBalance).toFixed(2)}`, 'success');
+                        drawerImportBtn.classList.add('hidden');
+                        closeDbCenter();
+                        currentPage = 1;
+                        loadTransactions(false);
+                        break;
+                    case 'alreadyImported':
+                        showToast('Legacy data was already imported previously.', 'info');
+                        drawerImportBtn.classList.add('hidden');
+                        break;
+                    case 'roomNotEmpty':
+                        showToast(`Import aborted: database already has ${result.existingCount} records.`, 'error');
+                        break;
+                    case 'legacyDbNotFound':
+                        showToast('Legacy database file not found. Contact support.', 'error');
+                        console.error('Legacy DB not found:', result.reason);
+                        break;
+                    case 'unexpectedCount':
+                        showToast(`Import failed: expected 64 records, found ${result.actual}.`, 'error');
+                        break;
+                    case 'validationFailed':
+                        showToast(`Validation failed (${result.gate}): ${result.detail}`, 'error');
+                        console.error('Import validation failed:', result);
+                        break;
+                    default:
+                        showToast(`Import error: ${result.error || 'Unknown error'}`, 'error');
+                        console.error('Import error:', result);
+                }
+            } catch (e) {
+                showToast('Import failed due to unexpected error.', 'error');
+                console.error('importLegacyDatabase() exception:', e);
+            } finally {
+                drawerImportBtn.disabled = false;
+                if (textEl) textEl.innerText = origText;
+                if (loader) loader.classList.add('hidden');
+            }
+        });
+    }
+
     // Wire up DB Center panel navigation
     setupDbCenterPanel();
 

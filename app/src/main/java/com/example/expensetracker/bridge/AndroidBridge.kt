@@ -1,9 +1,12 @@
 package com.example.expensetracker.bridge
 
+import android.content.Context
 import android.webkit.JavascriptInterface
 import android.util.Log
 import com.example.expensetracker.repository.LocalRepository
 import com.example.expensetracker.local.TransactionEntity
+import com.example.expensetracker.migration.ImportResult
+import com.example.expensetracker.migration.LegacyImportEngine
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.json.JSONArray
@@ -13,7 +16,8 @@ import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class AndroidBridge(private val repository: LocalRepository) {
+class AndroidBridge(private val repository: LocalRepository, private val context: Context) {
+
 
     private fun parseDateToLong(dateStr: String, preserveTimeFrom: Long? = null): Long {
         try {
@@ -228,15 +232,92 @@ class AndroidBridge(private val repository: LocalRepository) {
             try {
                 repository.softDeleteTransaction(id)
                 val response = JSONObject()
-                response.put("status", "ok")
+                response.put(\"status\", \"ok\")
                 response.toString()
             } catch (e: Exception) {
-                Log.e("AndroidBridge", "deleteTransaction error", e)
+                Log.e(\"AndroidBridge\", \"deleteTransaction error\", e)
                 val response = JSONObject()
-                response.put("status", "error")
-                response.put("error", e.message)
+                response.put(\"status\", \"error\")
+                response.put(\"error\", e.message)
                 response.toString()
             }
         }
+    }
+
+    /**
+     * Triggers the full legacy database import pipeline.
+     *
+     * Called by JS: window.AndroidBridge.importLegacyDatabase()
+     * This method blocks on the JavaBridge thread (runBlocking is intentional here —
+     * consistent with the pattern used by getTransactions/addTransaction/etc.).
+     *
+     * Returns a JSON string:
+     *   { "status": "success", "importedCount": 64, "finalBalance": 40642.25 }
+     *   { "status": "alreadyImported" }
+     *   { "status": "roomNotEmpty", "existingCount": N }
+     *   { "status": "legacyDbNotFound", "reason": "..." }
+     *   { "status": "unexpectedCount", "actual": N, "expected": 64 }
+     *   { "status": "validationFailed", "gate": "...", "detail": "..." }
+     *   { "status": "error", "error": "..." }
+     */
+    @JavascriptInterface
+    fun importLegacyDatabase(): String {
+        Log.d("AndroidBridge", "importLegacyDatabase() called from JS")
+        val engine = LegacyImportEngine(context)
+        val result = engine.execute()
+
+        val response = JSONObject()
+        when (result) {
+            is ImportResult.Success -> {
+                response.put("status", "success")
+                response.put("importedCount", result.importedCount)
+                response.put("finalBalance", result.finalBalance)
+            }
+            is ImportResult.AlreadyImported -> {
+                response.put("status", "alreadyImported")
+            }
+            is ImportResult.RoomNotEmpty -> {
+                response.put("status", "roomNotEmpty")
+                response.put("existingCount", result.existingCount)
+            }
+            is ImportResult.LegacyDbNotFound -> {
+                response.put("status", "legacyDbNotFound")
+                response.put("reason", result.reason)
+            }
+            is ImportResult.UnexpectedRecordCount -> {
+                response.put("status", "unexpectedCount")
+                response.put("actual", result.actual)
+                response.put("expected", result.expected)
+            }
+            is ImportResult.ValidationFailed -> {
+                response.put("status", "validationFailed")
+                response.put("gate", result.gate)
+                response.put("detail", result.detail)
+            }
+            is ImportResult.UnexpectedException -> {
+                response.put("status", "error")
+                response.put("error", result.message)
+            }
+        }
+        return response.toString()
+    }
+
+    /**
+     * Returns the current import status without triggering an import.
+     *
+     * Called by JS on page load to decide whether to show/hide the import button.
+     *
+     * Returns JSON:
+     *   { "imported": true,  "timestamp": "1718000000000" }
+     *   { "imported": false }
+     */
+    @JavascriptInterface
+    fun checkImportStatus(): String {
+        val engine = LegacyImportEngine(context)
+        val response = JSONObject()
+        response.put("imported", engine.isAlreadyImported())
+        val ts = engine.getImportTimestamp()
+        if (ts != null) response.put("timestamp", ts)
+        return response.toString()
     }
 }

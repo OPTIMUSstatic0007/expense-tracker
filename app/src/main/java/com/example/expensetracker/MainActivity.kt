@@ -225,7 +225,7 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
 
                     val database = ExpenseDatabase.getInstance(context)
                     val repository = LocalRepository(database.transactionDao())
-                    addJavascriptInterface(AndroidBridge(repository), "AndroidBridge")
+                    addJavascriptInterface(AndroidBridge(repository, context), "AndroidBridge")
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
