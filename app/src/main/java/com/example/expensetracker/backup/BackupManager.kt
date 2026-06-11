@@ -1,6 +1,7 @@
 package com.example.expensetracker.backup
 
 import android.content.Context
+import com.example.expensetracker.local.ExpenseDatabase
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -8,7 +9,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class BackupManager(private val context: Context) {
+class BackupManager(
+    private val context: Context,
+    private val database: ExpenseDatabase
+) {
 
     companion object {
         private const val DB_NAME = "expense_database"
@@ -29,7 +33,6 @@ class BackupManager(private val context: Context) {
                  return BackupResult.Failure("Failed to create backup directory ${typeDir.absolutePath}")
             }
 
-            // Also ensure metadata directory exists for future use
             val metadataDir = File(backupsDir, "metadata")
             if (!metadataDir.exists()) {
                 metadataDir.mkdirs()
@@ -38,14 +41,33 @@ class BackupManager(private val context: Context) {
             val timestamp = System.currentTimeMillis()
             val dateFormat = SimpleDateFormat("yyyy_MM_dd_HHmmss", Locale.getDefault())
             val dateString = dateFormat.format(Date(timestamp))
-            val backupFileName = "backup_$dateString.db"
-            val backupFile = File(typeDir, backupFileName)
+            val baseBackupName = "backup_$dateString.db"
 
-            copyFile(dbFile, backupFile)
+            // 1. Checkpoint Database
+            checkpointDatabase()
+
+            // 2. Backup Files
+            val (mainDbCopy, walCopy, shmCopy) = backupDatabaseFiles(dbFile, typeDir, baseBackupName)
+
+            // 3. Validate
+            if (!validateBackup(dbFile, mainDbCopy, walCopy, shmCopy)) {
+                return BackupResult.Failure("Backup validation failed")
+            }
+
+            // 4. Prepare Metadata (For future persistence)
+            val metadata = BackupMetadata(
+                lastBackupTime = timestamp,
+                backupCount = 1, // Placeholder
+                lastBackupType = type,
+                databaseVersion = database.openHelper.readableDatabase.version,
+                mainDbSize = mainDbCopy.length(),
+                walSize = walCopy?.length(),
+                shmSize = shmCopy?.length()
+            )
 
             BackupResult.Success(
-                backupFileName = backupFileName,
-                backupPath = backupFile.absolutePath,
+                backupFileName = baseBackupName,
+                backupPath = mainDbCopy.absolutePath,
                 timestamp = timestamp
             )
         } catch (e: Exception) {
@@ -53,15 +75,56 @@ class BackupManager(private val context: Context) {
         }
     }
 
-    private fun copyFile(source: File, destination: File) {
-        FileInputStream(source).use { inputStream ->
-            FileOutputStream(destination).use { outputStream ->
-                val buffer = ByteArray(1024)
-                var length: Int
-                while (inputStream.read(buffer).also { length = it } > 0) {
-                    outputStream.write(buffer, 0, length)
-                }
-            }
+    private fun checkpointDatabase() {
+        try {
+            database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").use { it.moveToNext() }
+        } catch (e: Exception) {
+            // Checkpointing failed, but we still try to backup
+            e.printStackTrace()
         }
+    }
+
+    private fun backupDatabaseFiles(
+        sourceDb: File,
+        targetDir: File,
+        baseBackupName: String
+    ): Triple<File, File?, File?> {
+        val mainDbCopy = File(targetDir, baseBackupName)
+        copyFile(sourceDb, mainDbCopy)
+
+        val sourceWal = File("${sourceDb.absolutePath}-wal")
+        var walCopy: File? = null
+        if (sourceWal.exists()) {
+            walCopy = File(targetDir, "$baseBackupName-wal")
+            copyFile(sourceWal, walCopy)
+        }
+
+        val sourceShm = File("${sourceDb.absolutePath}-shm")
+        var shmCopy: File? = null
+        if (sourceShm.exists()) {
+            shmCopy = File(targetDir, "$baseBackupName-shm")
+            copyFile(sourceShm, shmCopy)
+        }
+
+        return Triple(mainDbCopy, walCopy, shmCopy)
+    }
+
+    private fun validateBackup(
+        sourceDb: File,
+        mainDbCopy: File,
+        walCopy: File?,
+        shmCopy: File?
+    ): Boolean {
+        if (!mainDbCopy.exists() || mainDbCopy.length() == 0L) return false
+        if (sourceDb.length() != mainDbCopy.length()) return false
+
+        if (walCopy != null && (!walCopy.exists() || walCopy.length() == 0L)) return false
+        if (shmCopy != null && (!shmCopy.exists() || shmCopy.length() == 0L)) return false
+
+        return true
+    }
+
+    private fun copyFile(source: File, destination: File) {
+        source.copyTo(destination, overwrite = true)
     }
 }
