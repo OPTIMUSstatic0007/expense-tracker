@@ -464,6 +464,20 @@
                 </button>
                 <input type="file" id="restore-input" accept=".db" class="hidden">
             </div>
+
+            <!-- Available Backups List -->
+            <div class="mgmt-backups" style="margin-top: 1rem; background: var(--card-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                <h3>Available Backups</h3>
+                <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                    <select id="available-backups-select" style="flex: 1; padding: 0.5rem; border-radius: 4px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-primary);">
+                        <option value="" disabled selected>No backups available</option>
+                    </select>
+                    <button id="do-restore-selected-btn" class="btn-primary" style="padding: 0.5rem 1rem;">
+                        <span class="btn-text">Restore Selected</span>
+                        <span class="btn-loader hidden"></span>
+                    </button>
+                </div>
+            </div>
         </section>
     </main>
 

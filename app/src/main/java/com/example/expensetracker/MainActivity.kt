@@ -4,6 +4,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
 import com.example.expensetracker.auth.GoogleAuthManager
 import com.example.expensetracker.backup.BackupManager
+import com.example.expensetracker.backup.RestoreManager
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -225,9 +226,10 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
                     settings.allowUniversalAccessFromFileURLs = true
 
                     val database = ExpenseDatabase.getInstance(context)
-                    val repository = LocalRepository(database.transactionDao())
+                    val repository = LocalRepository(context)
                     val backupManager = BackupManager(context, database)
-                    addJavascriptInterface(AndroidBridge(repository, backupManager), "AndroidBridge")
+                    val restoreManager = RestoreManager(context, database, backupManager)
+                    addJavascriptInterface(AndroidBridge(repository, backupManager, restoreManager), "AndroidBridge")
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {

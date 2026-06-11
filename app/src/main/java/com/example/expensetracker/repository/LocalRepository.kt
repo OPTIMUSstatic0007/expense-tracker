@@ -1,10 +1,15 @@
 package com.example.expensetracker.repository
 
+import android.content.Context
+import com.example.expensetracker.local.ExpenseDatabase
 import com.example.expensetracker.local.TransactionDao
 import com.example.expensetracker.local.TransactionEntity
 import kotlinx.coroutines.flow.Flow
 
-class LocalRepository(private val transactionDao: TransactionDao) {
+class LocalRepository(private val context: Context) {
+
+    private val transactionDao: TransactionDao
+        get() = ExpenseDatabase.getInstance(context).transactionDao()
 
     suspend fun insertTransaction(transaction: TransactionEntity) {
         kotlinx.coroutines.Dispatchers.IO.let {

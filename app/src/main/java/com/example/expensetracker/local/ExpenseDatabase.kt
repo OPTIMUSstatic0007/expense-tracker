@@ -37,5 +37,9 @@ abstract class ExpenseDatabase : RoomDatabase() {
                 instance
             }
         }
+
+        fun resetInstance() {
+            INSTANCE = null
+        }
     }
 }

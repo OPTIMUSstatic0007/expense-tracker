@@ -15,9 +15,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import com.example.expensetracker.backup.BackupType
 import com.example.expensetracker.backup.BackupResult
+import com.example.expensetracker.backup.RestoreManager
 import java.io.File
 
-class AndroidBridge(private val repository: LocalRepository, private val backupManager: BackupManager) {
+class AndroidBridge(
+    private val repository: LocalRepository,
+    private val backupManager: BackupManager,
+    private val restoreManager: RestoreManager
+) {
 
     @JavascriptInterface
     fun backupDatabase(): String {
@@ -337,6 +342,48 @@ class AndroidBridge(private val repository: LocalRepository, private val backupM
                 response.put("error", e.message)
                 response.toString()
             }
+        }
+    }
+
+    @JavascriptInterface
+    fun getAvailableBackups(): String {
+        Log.d("AndroidBridge", "getAvailableBackups called")
+        return try {
+            val backups = restoreManager.getAvailableBackups()
+            val jsonArray = JSONArray()
+            for (backup in backups) {
+                val obj = JSONObject()
+                obj.put("fileName", backup.fileName)
+                obj.put("backupType", backup.backupType)
+                obj.put("timestamp", backup.timestamp)
+                obj.put("sizeBytes", backup.sizeBytes)
+                jsonArray.put(obj)
+            }
+            jsonArray.toString()
+        } catch (e: Exception) {
+            Log.e("AndroidBridge", "getAvailableBackups error", e)
+            "[]"
+        }
+    }
+
+    @JavascriptInterface
+    fun restoreDatabase(fileName: String): String {
+        Log.d("AndroidBridge", "restoreDatabase called: $fileName")
+        val response = JSONObject()
+        return try {
+            val success = restoreManager.restoreDatabase(fileName)
+            if (success) {
+                response.put("status", "success")
+            } else {
+                response.put("status", "error")
+                response.put("message", "Restore failed during validation or file replacement.")
+            }
+            response.toString()
+        } catch (e: Exception) {
+            Log.e("AndroidBridge", "restoreDatabase error", e)
+            response.put("status", "error")
+            response.put("message", e.message ?: "Unknown error")
+            response.toString()
         }
     }
 }

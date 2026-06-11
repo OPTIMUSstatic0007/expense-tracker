@@ -81,6 +81,8 @@ const restoreBtn = document.getElementById('restore-db-btn');
 const snapshotBtn = document.getElementById('snapshot-db-btn');
 const restoreInput = document.getElementById('restore-input');
 const backupStatusEl = document.getElementById('backup-status');
+const availableBackupsSelect = document.getElementById('available-backups-select');
+const doRestoreSelectedBtn = document.getElementById('do-restore-selected-btn');
 const lastBackupTimeEl = document.getElementById('last-backup-time');
 const autoBackupCountEl = document.getElementById('auto-backup-count');
 const manualBackupCountEl = document.getElementById('manual-backup-count');
@@ -1417,6 +1419,44 @@ function openDbCenter() {
     if (typeof window.refreshBackupMetrics === 'function') {
         window.refreshBackupMetrics();
     }
+    refreshAvailableBackups();
+}
+
+function refreshAvailableBackups() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.getAvailableBackups === 'function') {
+        try {
+            const backupsJson = window.AndroidBridge.getAvailableBackups();
+            const backups = JSON.parse(backupsJson);
+
+            if (!availableBackupsSelect) return;
+
+            availableBackupsSelect.innerHTML = '';
+
+            if (backups.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = "";
+                opt.disabled = true;
+                opt.selected = true;
+                opt.textContent = "No backups available";
+                availableBackupsSelect.appendChild(opt);
+            } else {
+                backups.forEach(backup => {
+                    const opt = document.createElement('option');
+                    opt.value = backup.fileName;
+                    // Format timestamp
+                    const date = new Date(backup.timestamp);
+                    opt.textContent = `${backup.fileName} (${backup.backupType}, ${(backup.sizeBytes / 1024).toFixed(1)} KB) - ${date.toLocaleString()}`;
+                    availableBackupsSelect.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            console.error("Error fetching available backups", e);
+        }
+    } else {
+        if (availableBackupsSelect) {
+            availableBackupsSelect.innerHTML = '<option value="" disabled selected>Desktop Mode: Backups unavailable</option>';
+        }
+    }
 }
 
 function closeDbCenter() {
@@ -1510,6 +1550,47 @@ async function fetchDbStats() {
 // ═══════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Restore Selected logic
+    if (doRestoreSelectedBtn && availableBackupsSelect) {
+        doRestoreSelectedBtn.addEventListener('click', () => {
+            const selectedFileName = availableBackupsSelect.value;
+            if (!selectedFileName) {
+                alert("Please select a backup to restore.");
+                return;
+            }
+
+            if (!confirm(`Restore selected backup (${selectedFileName})?\n\nCurrent database will be replaced.\nAn emergency backup will be created first.`)) {
+                return;
+            }
+
+            if (window.AndroidBridge && typeof window.AndroidBridge.restoreDatabase === 'function') {
+                try {
+                    doRestoreSelectedBtn.querySelector('.btn-loader').classList.remove('hidden');
+                    doRestoreSelectedBtn.querySelector('.btn-text').textContent = 'Restoring...';
+
+                    const responseJson = window.AndroidBridge.restoreDatabase(selectedFileName);
+                    const response = JSON.parse(responseJson);
+
+                    if (response.status === 'success') {
+                        alert("Restore successful! App will now reload.");
+                        window.location.reload();
+                    } else {
+                        alert("Restore failed: " + (response.message || "Unknown error"));
+                        doRestoreSelectedBtn.querySelector('.btn-loader').classList.add('hidden');
+                        doRestoreSelectedBtn.querySelector('.btn-text').textContent = 'Restore Selected';
+                    }
+                } catch (e) {
+                    console.error("Restore error", e);
+                    alert("Restore error: " + e.message);
+                    doRestoreSelectedBtn.querySelector('.btn-loader').classList.add('hidden');
+                    doRestoreSelectedBtn.querySelector('.btn-text').textContent = 'Restore Selected';
+                }
+            } else {
+                alert("Restore is only available on Android app.");
+            }
+        });
+    }
+
     // Segmented Toggle Logic
     const toggleBtns = document.querySelectorAll('.toggle-btn');
     const typeSelect = document.getElementById('type');
