@@ -3,6 +3,7 @@ package com.example.expensetracker
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
 import com.example.expensetracker.auth.GoogleAuthManager
+import com.example.expensetracker.backup.BackupManager
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -225,7 +226,8 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
 
                     val database = ExpenseDatabase.getInstance(context)
                     val repository = LocalRepository(database.transactionDao())
-                    addJavascriptInterface(AndroidBridge(repository), "AndroidBridge")
+                    val backupManager = BackupManager(context, database)
+                    addJavascriptInterface(AndroidBridge(repository, backupManager), "AndroidBridge")
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {

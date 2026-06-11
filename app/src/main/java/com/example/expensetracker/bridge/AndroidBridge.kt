@@ -1,6 +1,7 @@
 package com.example.expensetracker.bridge
 
 import android.webkit.JavascriptInterface
+import com.example.expensetracker.backup.BackupManager
 import android.util.Log
 import com.example.expensetracker.repository.LocalRepository
 import com.example.expensetracker.local.TransactionEntity
@@ -13,7 +14,7 @@ import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class AndroidBridge(private val repository: LocalRepository) {
+class AndroidBridge(private val repository: LocalRepository, private val backupManager: BackupManager) {
 
     private fun parseDateToLong(dateStr: String, preserveTimeFrom: Long? = null): Long {
         try {
