@@ -19,6 +19,10 @@ class BackupManager(
         private const val BACKUPS_DIR = "backups"
     }
 
+    fun getBackupDirectory(): File {
+        return File(context.filesDir, BACKUPS_DIR)
+    }
+
     fun createBackup(type: BackupType): BackupResult {
         return try {
             val dbFile = context.getDatabasePath(DB_NAME)

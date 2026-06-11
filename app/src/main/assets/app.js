@@ -403,17 +403,55 @@ function setupNavDrawer() {
         });
     }
 
-    // 2. Backup Database — reuses existing /backup/database download
+    // 2. Backup Database — using internal AndroidBridge BackupManager
     const drawerBackupBtn = document.getElementById('drawer-backup-btn');
     if (drawerBackupBtn) {
         drawerBackupBtn.addEventListener('click', () => {
-            showToast('Preparing database backup...', 'info');
-            window.location.href = `${BACKUP_BASE_URL}/database`;
-            setTimeout(() => {
-                updateBackupStatus();
-                fetchDbStats();
-            }, 2000);
+            if (isMobile && window.AndroidBridge && window.AndroidBridge.backupDatabase) {
+                if (confirm('Create a new manual backup of the database?')) {
+                    try {
+                        const responseStr = window.AndroidBridge.backupDatabase();
+                        const response = JSON.parse(responseStr);
+                        if (response.success) {
+                            showToast('Database backup created successfully', 'success');
+                            refreshBackupMetrics();
+                        } else {
+                            showToast('Backup failed: ' + response.message, 'error');
+                        }
+                    } catch (e) {
+                        showToast('Error creating backup: ' + e, 'error');
+                    }
+                }
+            } else {
+                showToast('Preparing database backup...', 'info');
+                window.location.href = `${BACKUP_BASE_URL}/database`;
+                setTimeout(() => {
+                    updateBackupStatus();
+                    fetchDbStats();
+                }, 2000);
+            }
         });
+    }
+
+    // Refresh Backup Metrics functionality
+    window.refreshBackupMetrics = function() {
+        if (isMobile && window.AndroidBridge && window.AndroidBridge.getBackupStatus) {
+            try {
+                const statusStr = window.AndroidBridge.getBackupStatus();
+                const status = JSON.parse(statusStr);
+
+                const lastBackupEl = document.getElementById('dbcenter-last-backup');
+                const totalBackupsEl = document.getElementById('dbcenter-total-backups');
+                const dbSizeEl = document.getElementById('dbcenter-db-size');
+
+                if (lastBackupEl) lastBackupEl.textContent = status.latestBackupTime || '—';
+                if (totalBackupsEl) totalBackupsEl.textContent = status.backupCount !== undefined ? status.backupCount : '—';
+                if (dbSizeEl && status.latestBackupSize) dbSizeEl.textContent = status.latestBackupSize;
+
+            } catch (e) {
+                console.error("Error refreshing backup metrics:", e);
+            }
+        }
     }
 
     // 3. Restore Database — triggers existing file input
@@ -1376,6 +1414,9 @@ function openDbCenter() {
 
     // Fetch live stats every time panel opens
     fetchDbStats();
+    if (typeof window.refreshBackupMetrics === 'function') {
+        window.refreshBackupMetrics();
+    }
 }
 
 function closeDbCenter() {
