@@ -677,10 +677,18 @@ async function loadTransactions(append = false) {
 
 async function updateBackupStatus() {
     try {
-        const response = await fetch(`${BACKUP_BASE_URL}/status`);
-        if (response.ok) {
-            const status = await response.json();
+        let status = null;
+        if (window.AndroidBridge && typeof window.AndroidBridge.getBackupStatus === 'function') {
+            const statusJson = window.AndroidBridge.getBackupStatus();
+            status = JSON.parse(statusJson);
+        } else {
+            const response = await fetch(`${BACKUP_BASE_URL}/status`);
+            if (response.ok) {
+                status = await response.json();
+            }
+        }
 
+        if (status) {
             if (backupStatusEl) {
                 backupStatusEl.className = '';
                 if (status.status === 'Pending Sync') {
@@ -1498,10 +1506,19 @@ async function fetchDbStats() {
     };
 
     try {
-        const response = await fetch('/db/stats');
-        if (response.ok) {
-            const stats = await response.json();
+        let stats = null;
 
+        if (window.AndroidBridge && typeof window.AndroidBridge.getDbStats === 'function') {
+            const statsJson = window.AndroidBridge.getDbStats();
+            stats = JSON.parse(statsJson);
+        } else {
+            const response = await fetch('/db/stats');
+            if (response.ok) {
+                stats = await response.json();
+            }
+        }
+
+        if (stats) {
             // Total Transactions — REAL backend count
             if (els.totalTxns) {
                 const count = parseInt(stats.totalTransactions, 10) || 0;
@@ -1540,6 +1557,7 @@ async function fetchDbStats() {
             }
         }
     } catch (e) {
+        console.error("fetchDbStats error", e);
         // Graceful fallback — panel still shows but with placeholder data
         if (els.totalTxns) els.totalTxns.innerText = 'Unavailable';
         if (els.dbSize) els.dbSize.innerText = 'Unavailable';

@@ -229,7 +229,7 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
                     val repository = LocalRepository(context)
                     val backupManager = BackupManager(context, database)
                     val restoreManager = RestoreManager(context, database, backupManager)
-                    addJavascriptInterface(AndroidBridge(repository, backupManager, restoreManager), "AndroidBridge")
+                    addJavascriptInterface(AndroidBridge(repository, backupManager, restoreManager, context), "AndroidBridge")
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {

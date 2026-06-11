@@ -25,7 +25,7 @@ class BackupManager(
     }
 
     fun createBackup(type: BackupType): BackupResult {
-        Log.d("BackupManager", "createBackup called with type: ${type.name}")
+        Log.d("BackupManager", "${type.name.lowercase(Locale.getDefault())} backup started")
         return try {
             val dbFile = context.getDatabasePath(DB_NAME)
             if (!dbFile.exists()) {
@@ -74,7 +74,7 @@ class BackupManager(
                 shmSize = shmCopy?.length()
             )
 
-            Log.d("BackupManager", "${type.name.lowercase(Locale.getDefault())} backup created: $baseBackupName")
+            Log.d("BackupManager", "${type.name.lowercase(Locale.getDefault())} backup completed")
 
             BackupResult.Success(
                 backupFileName = baseBackupName,

@@ -17,16 +17,19 @@ import com.example.expensetracker.backup.BackupType
 import com.example.expensetracker.backup.BackupResult
 import com.example.expensetracker.backup.RestoreManager
 import java.io.File
+import android.content.Context
+import java.util.Date
 
 class AndroidBridge(
     private val repository: LocalRepository,
     private val backupManager: BackupManager,
-    private val restoreManager: RestoreManager
+    private val restoreManager: RestoreManager,
+    private val context: Context
 ) {
 
     @JavascriptInterface
     fun backupDatabase(): String {
-        Log.d("AndroidBridge", "createRestorePoint (backupDatabase) called")
+        Log.d("AndroidBridge", "backupDatabase called")
         val result = backupManager.createBackup(BackupType.MANUAL)
         val response = JSONObject()
         if (result is BackupResult.Success) {
@@ -41,6 +44,56 @@ class AndroidBridge(
             response.put("message", result.errorMessage)
         }
         return response.toString()
+    }
+
+    @JavascriptInterface
+    fun getDbStats(): String {
+        Log.d("AndroidBridge", "getDbStats called")
+        return runBlocking {
+            val response = JSONObject()
+            try {
+                val allTxns = repository.getAllTransactions().first()
+                val totalTxns = allTxns.size
+                val dbFile = context.getDatabasePath("expense_database")
+                val dbSize = if (dbFile.exists()) dbFile.length() else 0L
+
+                val backupsDir = backupManager.getBackupDirectory()
+                var lastBackupTime = "Never"
+                var latestTime = 0L
+                for (type in listOf("auto", "manual", "emergency")) {
+                    val typeDir = File(backupsDir, type)
+                    if (typeDir.exists()) {
+                        val files = typeDir.listFiles()?.filter { it.name.endsWith(".db") }
+                        val maxFile = files?.maxByOrNull { it.lastModified() }
+                        if (maxFile != null && maxFile.lastModified() > latestTime) {
+                            latestTime = maxFile.lastModified()
+                            lastBackupTime = formatDate(latestTime)
+                        }
+                    }
+                }
+
+                val pendingSync = allTxns.count { it.syncPending }
+
+                response.put("totalTransactions", totalTxns)
+                response.put("databaseSizeBytes", dbSize)
+                response.put("lastBackupTime", lastBackupTime)
+
+                if (pendingSync == 0) {
+                    response.put("syncStatus", "Synced")
+                } else {
+                    response.put("syncStatus", "Pending Sync")
+                    response.put("pendingMutations", pendingSync)
+                }
+
+            } catch (e: Exception) {
+                Log.e("AndroidBridge", "getDbStats error", e)
+                response.put("totalTransactions", 0)
+                response.put("databaseSizeBytes", 0)
+                response.put("lastBackupTime", "Unavailable")
+                response.put("syncStatus", "Error")
+            }
+            response.toString()
+        }
     }
 
     @JavascriptInterface
