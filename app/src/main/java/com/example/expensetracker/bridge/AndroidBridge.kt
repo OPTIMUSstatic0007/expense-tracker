@@ -1,6 +1,7 @@
 package com.example.expensetracker.bridge
 
 import android.webkit.JavascriptInterface
+import com.example.expensetracker.backup.BackupManager
 import android.util.Log
 import com.example.expensetracker.repository.LocalRepository
 import com.example.expensetracker.local.TransactionEntity
@@ -12,8 +13,88 @@ import java.util.UUID
 import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Locale
+import com.example.expensetracker.backup.BackupType
+import com.example.expensetracker.backup.BackupResult
+import java.io.File
 
-class AndroidBridge(private val repository: LocalRepository) {
+class AndroidBridge(private val repository: LocalRepository, private val backupManager: BackupManager) {
+
+    @JavascriptInterface
+    fun backupDatabase(): String {
+        val result = backupManager.createBackup(BackupType.MANUAL)
+        val response = JSONObject()
+        if (result is BackupResult.Success) {
+            response.put("success", true)
+            response.put("backupPath", result.backupPath)
+            response.put("backupFile", result.backupFileName)
+            response.put("timestamp", result.timestamp)
+        } else if (result is BackupResult.Failure) {
+            response.put("success", false)
+            response.put("message", result.errorMessage)
+        }
+        return response.toString()
+    }
+
+    @JavascriptInterface
+    fun getBackupStatus(): String {
+        val response = JSONObject()
+        try {
+            val backupsDir = backupManager.getBackupDirectory()
+            var totalBackups = 0
+            var autoCount = 0
+            var manualCount = 0
+            var latestTime = 0L
+            var latestSize = 0L
+
+            if (backupsDir.exists() && backupsDir.isDirectory) {
+                val autoDir = File(backupsDir, "auto")
+                val manualDir = File(backupsDir, "manual")
+                val emergencyDir = File(backupsDir, "emergency")
+
+                val allFiles = mutableListOf<File>()
+
+                if (autoDir.exists()) {
+                    val files = autoDir.listFiles()?.filter { it.name.endsWith(".db") } ?: emptyList()
+                    autoCount = files.size
+                    allFiles.addAll(files)
+                }
+                if (manualDir.exists()) {
+                    val files = manualDir.listFiles()?.filter { it.name.endsWith(".db") } ?: emptyList()
+                    manualCount = files.size
+                    allFiles.addAll(files)
+                }
+                if (emergencyDir.exists()) {
+                    val files = emergencyDir.listFiles()?.filter { it.name.endsWith(".db") } ?: emptyList()
+                    allFiles.addAll(files)
+                }
+
+                totalBackups = allFiles.size
+
+                val latestFile = allFiles.maxByOrNull { it.lastModified() }
+                if (latestFile != null) {
+                    latestTime = latestFile.lastModified()
+                    latestSize = latestFile.length()
+                }
+            }
+
+            response.put("backupCount", totalBackups)
+            response.put("latestBackupTime", if (latestTime > 0) formatDate(latestTime) else "Never")
+
+            val sizeMb = if (latestSize > 0) String.format(Locale.US, "%.2f MB", latestSize / (1024.0 * 1024.0)) else "0 MB"
+            response.put("latestBackupSize", sizeMb)
+            response.put("autoBackupCount", autoCount)
+            response.put("manualBackupCount", manualCount)
+
+        } catch (e: Exception) {
+            Log.e("AndroidBridge", "getBackupStatus error", e)
+            response.put("backupCount", 0)
+            response.put("latestBackupTime", "Error")
+            response.put("latestBackupSize", "0 MB")
+            response.put("autoBackupCount", 0)
+            response.put("manualBackupCount", 0)
+        }
+        return response.toString()
+    }
 
     private fun parseDateToLong(dateStr: String, preserveTimeFrom: Long? = null): Long {
         try {
@@ -163,6 +244,12 @@ class AndroidBridge(private val repository: LocalRepository) {
 
                 repository.insertTransaction(entity)
 
+                try {
+                    backupManager.createBackup(BackupType.AUTO)
+                } catch (be: Exception) {
+                    Log.e("AndroidBridge", "Auto backup failed during addTransaction", be)
+                }
+
                 val response = JSONObject()
                 response.put("status", "ok")
                 response.toString()
@@ -204,6 +291,12 @@ class AndroidBridge(private val repository: LocalRepository) {
                         sequenceId = existingEntity.sequenceId
                     )
                     repository.updateTransaction(entity)
+
+                    try {
+                        backupManager.createBackup(BackupType.AUTO)
+                    } catch (be: Exception) {
+                        Log.e("AndroidBridge", "Auto backup failed during updateTransaction", be)
+                    }
                 } else {
                     throw Exception("Transaction not found")
                 }
@@ -227,6 +320,13 @@ class AndroidBridge(private val repository: LocalRepository) {
         return runBlocking {
             try {
                 repository.softDeleteTransaction(id)
+
+                try {
+                    backupManager.createBackup(BackupType.AUTO)
+                } catch (be: Exception) {
+                    Log.e("AndroidBridge", "Auto backup failed during deleteTransaction", be)
+                }
+
                 val response = JSONObject()
                 response.put("status", "ok")
                 response.toString()
