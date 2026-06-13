@@ -481,11 +481,25 @@ function setupNavDrawer() {
 
     // 3. Restore Database — triggers existing file input
     const drawerRestoreBtn = document.getElementById('drawer-restore-btn');
-    if (drawerRestoreBtn && restoreInput) {
+    if (drawerRestoreBtn) {
         drawerRestoreBtn.addEventListener('click', () => {
             closeDbCenter();
-            // Small delay lets panel close animation finish before file picker opens
-            setTimeout(() => restoreInput.click(), 350);
+            // Wait for drawer close animation before opening the management section
+            setTimeout(() => {
+                const mgmtHeader = document.querySelector('.mgmt-header');
+                if (mgmtHeader) {
+                    mgmtHeader.scrollIntoView({ behavior: 'smooth' });
+                    // Highlight the select to prompt user action
+                    const selectEl = document.getElementById('available-backups-select');
+                    if (selectEl) {
+                        setTimeout(() => {
+                            selectEl.focus();
+                            selectEl.style.boxShadow = '0 0 0 2px var(--accent)';
+                            setTimeout(() => selectEl.style.boxShadow = '', 2000);
+                        }, 500);
+                    }
+                }
+            }, 350);
         });
     }
 
