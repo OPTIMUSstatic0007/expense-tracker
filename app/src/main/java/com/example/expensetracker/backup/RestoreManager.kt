@@ -69,9 +69,11 @@ class RestoreManager(
     }
 
     fun restoreDatabase(fileName: String): Boolean {
+        Log.d("RestoreManager", "restore requested")
         Log.d("RestoreManager", "Initiating restore sequence for: $fileName")
 
         // 1. Create emergency backup
+        Log.d("RestoreManager", "emergency snapshot started")
         Log.d("RestoreManager", "Creating mandatory emergency snapshot...")
         val emergencyBackupResult = backupManager.createBackup(BackupType.EMERGENCY)
         if (emergencyBackupResult is BackupResult.Failure) {

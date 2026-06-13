@@ -398,16 +398,28 @@ function setupNavDrawer() {
             if (loader) loader.classList.remove('hidden');
 
             try {
-                const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
-                if (response.ok) {
-                    showToast('Restore point created');
-                    updateBackupStatus();
-                    fetchDbStats();
+                if (window.AndroidBridge && typeof window.AndroidBridge.backupDatabase === 'function') {
+                    const responseStr = window.AndroidBridge.backupDatabase();
+                    const response = JSON.parse(responseStr);
+                    if (response.status === 'success') {
+                        showToast(response.message || 'Restore point created', 'success');
+                        updateBackupStatus();
+                        fetchDbStats();
+                    } else {
+                        showToast(response.message || 'Failed to create snapshot', 'error');
+                    }
                 } else {
-                    showToast('Failed to create restore point', 'error');
+                    const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
+                    if (response.ok) {
+                        showToast('Restore point created');
+                        updateBackupStatus();
+                        fetchDbStats();
+                    } else {
+                        showToast('Failed to create restore point', 'error');
+                    }
                 }
             } catch (e) {
-                showToast('Network error', 'error');
+                showToast('Network error or exception', 'error');
             } finally {
                 drawerSnapshotBtn.disabled = false;
                 if (textEl) textEl.innerText = origText;
@@ -420,13 +432,13 @@ function setupNavDrawer() {
     const drawerBackupBtn = document.getElementById('drawer-backup-btn');
     if (drawerBackupBtn) {
         drawerBackupBtn.addEventListener('click', () => {
-            if (isMobile && window.AndroidBridge && window.AndroidBridge.backupDatabase) {
+            if (window.AndroidBridge && typeof window.AndroidBridge.backupDatabase === 'function') {
                 if (confirm('Create a new manual backup of the database?')) {
                     try {
                         const responseStr = window.AndroidBridge.backupDatabase();
                         const response = JSON.parse(responseStr);
-                        if (response.success) {
-                            showToast('Database backup created successfully', 'success');
+                        if (response.status === 'success') {
+                            showToast(response.message || 'Database backup created successfully', 'success');
                             refreshBackupMetrics();
                         } else {
                             showToast('Backup failed: ' + response.message, 'error');
@@ -715,38 +727,6 @@ async function updateBackupStatus() {
     }
 }
 
-async function handleRestore(file) {
-    if (!confirm('WARNING: This will replace your current ledger data. An emergency backup will be created first. Proceed?')) {
-        restoreInput.value = '';
-        return;
-    }
-
-    setLoading(restoreBtn, true, 'Restore from File');
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-        const response = await fetch('/restore/database', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (response.ok) {
-            showToast('Database restored successfully');
-            currentPage = 1;
-            await loadTransactions();
-            updateBackupStatus();
-        } else {
-            const err = await response.text();
-            showToast(err || 'Failed to restore', 'error');
-        }
-    } catch (error) {
-        showToast('Network error during restore', 'error');
-    } finally {
-        setLoading(restoreBtn, false, 'Restore from File');
-        restoreInput.value = '';
-    }
-}
 
 function applyFilters() {
     const searchTerm = searchInput.value.toLowerCase();

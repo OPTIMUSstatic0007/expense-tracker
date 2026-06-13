@@ -223,9 +223,10 @@ class AndroidBridge(
             var totalCredit = 0.0
             var totalDebit = 0.0
 
-            val reversedEntities = sortedEntities.reversed()
             val balances = mutableMapOf<String, Double>()
-            for (entity in reversedEntities) {
+            // The DAO returns newest first. We need to iterate from oldest to newest to compute running balance.
+            val oldestFirstEntities = sortedEntities.reversed()
+            for (entity in oldestFirstEntities) {
                 if (entity.type == "Credit") {
                     globalBalance += entity.amount
                     totalCredit += entity.amount
@@ -237,6 +238,7 @@ class AndroidBridge(
             }
 
             val jsonArray = JSONArray()
+            // Iterate strictly through newest-first paged list
             for (entity in pagedEntities) {
                 val obj = JSONObject()
                 obj.put("id", entity.id)
@@ -425,6 +427,7 @@ class AndroidBridge(
 
     @JavascriptInterface
     fun restoreDatabase(fileName: String): String {
+        Log.d("AndroidBridge", "restoreDatabase called")
         Log.d("AndroidBridge", "restoreDatabase called: $fileName")
         val response = JSONObject()
         return try {
