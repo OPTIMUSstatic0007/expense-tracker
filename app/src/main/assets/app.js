@@ -176,6 +176,8 @@ function setupEventListeners() {
 
     // Backup & Restore
     if (snapshotBtn) snapshotBtn.addEventListener('click', async () => {
+        console.log('[SNAPSHOT] desktop snapshotBtn click received');
+        console.log('[SNAPSHOT] current page before backup:', window.location.href);
         setLoading(snapshotBtn, true, 'Create Restore Point');
         if (backupStatusEl) {
             backupStatusEl.innerText = 'Creating Snapshot';
@@ -183,8 +185,11 @@ function setupEventListeners() {
         }
         try {
             if (window.AndroidBridge && typeof window.AndroidBridge.backupDatabase === 'function') {
+                console.log('[SNAPSHOT] desktop: calling AndroidBridge.backupDatabase()');
                 const responseJson = window.AndroidBridge.backupDatabase();
+                console.log('[SNAPSHOT] desktop: raw response:', responseJson);
                 const response = JSON.parse(responseJson);
+                console.log('[SNAPSHOT] desktop: parsed response:', JSON.stringify(response));
                 if (response.status === 'success') {
                     if (backupStatusEl) {
                         backupStatusEl.innerText = 'Restore Point Created';
@@ -198,6 +203,7 @@ function setupEventListeners() {
                     if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
                 }
             } else {
+                console.log('[SNAPSHOT] desktop: no AndroidBridge, using fetch');
                 const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
                 if (response.ok) {
                     if (backupStatusEl) {
@@ -212,14 +218,18 @@ function setupEventListeners() {
                 }
             }
         } catch (e) {
+            console.error('[SNAPSHOT] desktop: exception:', e);
             showToast('Network error or exception', 'error');
             if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
         } finally {
+            console.log('[SNAPSHOT] desktop: finally block, page is:', window.location.href);
             setLoading(snapshotBtn, false, 'Create Restore Point');
         }
     });
 
     if (backupBtn) backupBtn.addEventListener('click', () => {
+        console.log('[BACKUP] desktop backupBtn click received');
+        console.log('[BACKUP] WARNING: this handler does window.location.href redirect!');
         showToast('Preparing database backup...', 'info');
         window.location.href = `${BACKUP_BASE_URL}/database`;
         setTimeout(() => { if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics(); }, 2000);
@@ -388,7 +398,13 @@ function setupNavDrawer() {
     // 1. Create Restore Point — reuses existing /backup/snapshot API
     const drawerSnapshotBtn = document.getElementById('drawer-snapshot-btn');
     if (drawerSnapshotBtn) {
-        drawerSnapshotBtn.addEventListener('click', async () => {
+        drawerSnapshotBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[SNAPSHOT] drawer-snapshot-btn click received');
+            console.log('[SNAPSHOT] current page:', window.location.href);
+            console.log('[SNAPSHOT] event target:', e.target.id || e.target.className);
+            console.log('[SNAPSHOT] db-center-panel open?', document.getElementById('db-center-panel')?.classList.contains('is-open'));
             const textEl  = drawerSnapshotBtn.querySelector('.db-center-action-text');
             const loader  = drawerSnapshotBtn.querySelector('.drawer-action-loader');
             const origText = 'Create Restore Point';
@@ -399,16 +415,26 @@ function setupNavDrawer() {
 
             try {
                 if (window.AndroidBridge && typeof window.AndroidBridge.backupDatabase === 'function') {
+                    console.log('[SNAPSHOT] calling AndroidBridge.backupDatabase()');
                     const responseStr = window.AndroidBridge.backupDatabase();
+                    console.log('[SNAPSHOT] raw response:', responseStr);
                     const response = JSON.parse(responseStr);
+                    console.log('[SNAPSHOT] parsed response:', JSON.stringify(response));
+                    console.log('[SNAPSHOT] backup completed, status:', response.status);
                     if (response.status === 'success') {
+                        console.log('[SNAPSHOT] calling showToast with message:', response.message);
                         showToast(response.message || 'Restore point created', 'success');
+                        console.log('[SNAPSHOT] calling updateBackupStatus()');
                         updateBackupStatus();
+                        console.log('[SNAPSHOT] calling fetchDbStats()');
                         fetchDbStats();
+                        console.log('[SNAPSHOT] post-success page:', window.location.href);
                     } else {
+                        console.log('[SNAPSHOT] backup failed:', response.message);
                         showToast(response.message || 'Failed to create snapshot', 'error');
                     }
                 } else {
+                    console.log('[SNAPSHOT] no AndroidBridge, using fetch');
                     const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
                     if (response.ok) {
                         showToast('Restore point created');
@@ -419,8 +445,11 @@ function setupNavDrawer() {
                     }
                 }
             } catch (e) {
+                console.error('[SNAPSHOT] exception:', e);
                 showToast('Network error or exception', 'error');
             } finally {
+                console.log('[SNAPSHOT] finally block, page is:', window.location.href);
+                console.log('[SNAPSHOT] db-center-panel still open?', document.getElementById('db-center-panel')?.classList.contains('is-open'));
                 drawerSnapshotBtn.disabled = false;
                 if (textEl) textEl.innerText = origText;
                 if (loader) loader.classList.add('hidden');
@@ -460,10 +489,19 @@ function setupNavDrawer() {
 
     // Refresh Backup Metrics functionality
     window.refreshBackupMetrics = function() {
-        if (isMobile && window.AndroidBridge && window.AndroidBridge.getBackupStatus) {
+        console.log('[SNAPSHOT] refreshBackupMetrics called');
+        console.log('[SNAPSHOT] isMobile (raw ref, no parens):', isMobile);
+        console.log('[SNAPSHOT] isMobile() (called):', isMobile());
+        console.log('[SNAPSHOT] typeof isMobile:', typeof isMobile);
+        console.log('[SNAPSHOT] AndroidBridge present:', !!window.AndroidBridge);
+        console.log('[SNAPSHOT] getBackupStatus present:', !!(window.AndroidBridge && window.AndroidBridge.getBackupStatus));
+        if (isMobile() && window.AndroidBridge && window.AndroidBridge.getBackupStatus) {
+            console.log('[SNAPSHOT] refreshBackupMetrics: entered isMobile branch (parens added)');
             try {
                 const statusStr = window.AndroidBridge.getBackupStatus();
+                console.log('[SNAPSHOT] getBackupStatus raw:', statusStr);
                 const status = JSON.parse(statusStr);
+                console.log('[SNAPSHOT] getBackupStatus parsed:', JSON.stringify(status));
 
                 const lastBackupEl = document.getElementById('dbcenter-last-backup');
                 const totalBackupsEl = document.getElementById('dbcenter-total-backups');
@@ -474,32 +512,107 @@ function setupNavDrawer() {
                 if (dbSizeEl && status.latestBackupSize) dbSizeEl.textContent = status.latestBackupSize;
 
             } catch (e) {
-                console.error("Error refreshing backup metrics:", e);
+                console.error('[SNAPSHOT] refreshBackupMetrics error:', e);
             }
+        } else {
+            console.log('[SNAPSHOT] refreshBackupMetrics: skipped (condition false)');
         }
     }
 
     // 3. Restore Database — triggers existing file input
     const drawerRestoreBtn = document.getElementById('drawer-restore-btn');
+    console.log('[RESTORE] drawer-restore-btn element found:', !!drawerRestoreBtn);
     if (drawerRestoreBtn) {
-        drawerRestoreBtn.addEventListener('click', () => {
-            closeDbCenter();
-            // Wait for drawer close animation before opening the management section
-            setTimeout(() => {
-                const mgmtHeader = document.querySelector('.mgmt-header');
-                if (mgmtHeader) {
-                    mgmtHeader.scrollIntoView({ behavior: 'smooth' });
-                    // Highlight the select to prompt user action
-                    const selectEl = document.getElementById('available-backups-select');
-                    if (selectEl) {
-                        setTimeout(() => {
-                            selectEl.focus();
-                            selectEl.style.boxShadow = '0 0 0 2px var(--accent)';
-                            setTimeout(() => selectEl.style.boxShadow = '', 2000);
-                        }, 500);
+        drawerRestoreBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[RESTORE] drawer-restore-btn clicked');
+            
+            let ui = document.getElementById('mobile-restore-ui');
+            if (!ui) {
+                ui = document.createElement('div');
+                ui.id = 'mobile-restore-ui';
+                ui.style.marginTop = '16px';
+                ui.style.padding = '12px';
+                ui.style.background = 'var(--background)';
+                ui.style.borderRadius = 'var(--border-radius-md)';
+                ui.style.border = '1px solid var(--border)';
+                ui.style.display = 'none';
+                ui.innerHTML = `
+                    <h4 style="margin-bottom: 8px; font-size: 0.875rem; color: var(--text-primary);">Select Backup to Restore</h4>
+                    <select id="mobile-backup-select" style="width: 100%; margin-bottom: 12px; padding: 8px; border-radius: 4px; background: var(--surface); color: var(--text-primary); border: 1px solid var(--border); font-size: 0.875rem;"></select>
+                    <button id="mobile-do-restore-btn" class="btn-primary" style="width: 100%; padding: 10px; font-size: 0.875rem;">
+                        <span class="btn-text">Restore Selected</span>
+                        <span class="btn-loader hidden" style="margin-left: 8px;"></span>
+                    </button>
+                `;
+                drawerRestoreBtn.parentElement.appendChild(ui);
+                
+                document.getElementById('mobile-do-restore-btn').addEventListener('click', () => {
+                    const selectedFileName = document.getElementById('mobile-backup-select').value;
+                    if (!selectedFileName) {
+                        showToast("Please select a backup.", "error");
+                        return;
                     }
+                    if (!confirm(`Restore backup (${selectedFileName})?\n\nCurrent database will be replaced.\nAn emergency backup will be created first.`)) return;
+
+                    if (window.AndroidBridge && typeof window.AndroidBridge.restoreDatabase === 'function') {
+                        const btn = document.getElementById('mobile-do-restore-btn');
+                        const textSpan = btn.querySelector('.btn-text');
+                        const loader = btn.querySelector('.btn-loader');
+                        textSpan.innerText = 'Restoring...';
+                        loader.classList.remove('hidden');
+                        btn.disabled = true;
+                        
+                        setTimeout(() => {
+                            try {
+                                const responseJson = window.AndroidBridge.restoreDatabase(selectedFileName);
+                                const response = JSON.parse(responseJson);
+                                if (response.status === 'success') {
+                                    showToast("Restore successful! Reloading...", "success");
+                                    setTimeout(() => window.location.reload(), 1500);
+                                } else {
+                                    showToast("Restore failed: " + response.message, "error");
+                                    textSpan.innerText = 'Restore Selected';
+                                    loader.classList.add('hidden');
+                                    btn.disabled = false;
+                                }
+                            } catch (e) {
+                                showToast("Restore error: " + e.message, "error");
+                                textSpan.innerText = 'Restore Selected';
+                                loader.classList.add('hidden');
+                                btn.disabled = false;
+                            }
+                        }, 100);
+                    }
+                });
+            }
+
+            const selectEl = document.getElementById('mobile-backup-select');
+            selectEl.innerHTML = '';
+            if (window.AndroidBridge && typeof window.AndroidBridge.getAvailableBackups === 'function') {
+                try {
+                    const backupsJson = window.AndroidBridge.getAvailableBackups();
+                    const backups = JSON.parse(backupsJson);
+                    if (backups.length === 0) {
+                        selectEl.innerHTML = '<option value="" disabled selected>No backups available</option>';
+                    } else {
+                        backups.forEach(backup => {
+                            const opt = document.createElement('option');
+                            opt.value = backup.fileName;
+                            const date = new Date(backup.timestamp);
+                            opt.textContent = `${backup.fileName} (${backup.backupType}, ${(backup.sizeBytes / 1024).toFixed(1)} KB) - ${date.toLocaleString()}`;
+                            selectEl.appendChild(opt);
+                        });
+                    }
+                } catch (e) {
+                    selectEl.innerHTML = '<option value="" disabled selected>Error loading backups</option>';
                 }
-            }, 350);
+            } else {
+                selectEl.innerHTML = '<option value="" disabled selected>Not available on Desktop</option>';
+            }
+            
+            ui.style.display = ui.style.display === 'none' ? 'block' : 'none';
         });
     }
 
@@ -621,10 +734,30 @@ function formatMobileDate(dateStr) {
 // --- UI Feedback ---
 
 function showToast(message, type = 'success') {
+    console.log('[TOAST] showToast called');
+    console.log('[TOAST] raw message:', message);
+    console.log('[TOAST] message type:', typeof message);
+    console.log('[TOAST] message is null:', message === null);
+    console.log('[TOAST] message is undefined:', message === undefined);
+    console.log('[TOAST] message is empty string:', message === '');
+    console.log('[TOAST] toast type:', type);
+    console.log('[TOAST] toastContainer exists:', !!toastContainer);
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerHTML = `<span class="toast-msg">${message}</span>`;
+    console.log('[TOAST] toast innerHTML:', toast.innerHTML);
     toastContainer.appendChild(toast);
+    console.log('[TOAST] toast appended to container');
+    // Check computed styles
+    const toastStyles = window.getComputedStyle(toast);
+    const msgSpan = toast.querySelector('.toast-msg');
+    const msgStyles = msgSpan ? window.getComputedStyle(msgSpan) : null;
+    console.log('[TOAST] toast background-color:', toastStyles.backgroundColor);
+    console.log('[TOAST] toast color:', toastStyles.color);
+    console.log('[TOAST] .toast-msg color:', msgStyles ? msgStyles.color : 'NO SPAN');
+    console.log('[TOAST] .toast-msg innerText:', msgSpan ? msgSpan.innerText : 'NO SPAN');
+    console.log('[TOAST] toast offsetWidth:', toast.offsetWidth);
+    console.log('[TOAST] toast offsetHeight:', toast.offsetHeight);
     setTimeout(() => {
         toast.classList.add('toast-fade-out');
         setTimeout(() => toast.remove(), 300);
@@ -1436,16 +1569,28 @@ function openDbCenter() {
 }
 
 function refreshAvailableBackups() {
+    console.log('[RESTORE] refreshAvailableBackups called');
+    console.log('[RESTORE] AndroidBridge present:', !!window.AndroidBridge);
+    console.log('[RESTORE] getAvailableBackups present:', !!(window.AndroidBridge && typeof window.AndroidBridge.getAvailableBackups === 'function'));
+    console.log('[RESTORE] availableBackupsSelect element:', !!availableBackupsSelect);
     if (window.AndroidBridge && typeof window.AndroidBridge.getAvailableBackups === 'function') {
         try {
+            console.log('[RESTORE] requesting backups from AndroidBridge');
             const backupsJson = window.AndroidBridge.getAvailableBackups();
+            console.log('[RESTORE] raw backup payload:', backupsJson);
             const backups = JSON.parse(backupsJson);
+            console.log('[RESTORE] parsed backup payload:', JSON.stringify(backups));
+            console.log('[RESTORE] backup count:', backups.length);
 
-            if (!availableBackupsSelect) return;
+            if (!availableBackupsSelect) {
+                console.log('[RESTORE] DEAD END: availableBackupsSelect is null');
+                return;
+            }
 
             availableBackupsSelect.innerHTML = '';
 
             if (backups.length === 0) {
+                console.log('[RESTORE] no backups found, showing placeholder');
                 const opt = document.createElement('option');
                 opt.value = "";
                 opt.disabled = true;
@@ -1453,7 +1598,8 @@ function refreshAvailableBackups() {
                 opt.textContent = "No backups available";
                 availableBackupsSelect.appendChild(opt);
             } else {
-                backups.forEach(backup => {
+                backups.forEach((backup, i) => {
+                    console.log(`[RESTORE] backup[${i}]:`, backup.fileName, backup.backupType, backup.sizeBytes, 'bytes');
                     const opt = document.createElement('option');
                     opt.value = backup.fileName;
                     // Format timestamp
@@ -1461,11 +1607,13 @@ function refreshAvailableBackups() {
                     opt.textContent = `${backup.fileName} (${backup.backupType}, ${(backup.sizeBytes / 1024).toFixed(1)} KB) - ${date.toLocaleString()}`;
                     availableBackupsSelect.appendChild(opt);
                 });
+                console.log('[RESTORE] select populated with', backups.length, 'options');
             }
         } catch (e) {
-            console.error("Error fetching available backups", e);
+            console.error('[RESTORE] error fetching available backups:', e);
         }
     } else {
+        console.log('[RESTORE] no AndroidBridge, showing desktop placeholder');
         if (availableBackupsSelect) {
             availableBackupsSelect.innerHTML = '<option value="" disabled selected>Desktop Mode: Backups unavailable</option>';
         }
@@ -1574,44 +1722,61 @@ async function fetchDbStats() {
 
 document.addEventListener('DOMContentLoaded', () => {
     // Restore Selected logic
+    console.log('[RESTORE] DOMContentLoaded: doRestoreSelectedBtn exists:', !!doRestoreSelectedBtn);
+    console.log('[RESTORE] DOMContentLoaded: availableBackupsSelect exists:', !!availableBackupsSelect);
     if (doRestoreSelectedBtn && availableBackupsSelect) {
+        console.log('[RESTORE] wiring up doRestoreSelectedBtn click handler');
         doRestoreSelectedBtn.addEventListener('click', () => {
+            console.log('[RESTORE] do-restore-selected-btn clicked');
             const selectedFileName = availableBackupsSelect.value;
+            console.log('[RESTORE] selected backup:', selectedFileName);
             if (!selectedFileName) {
+                console.log('[RESTORE] no backup selected, showing alert');
                 alert("Please select a backup to restore.");
                 return;
             }
 
             if (!confirm(`Restore selected backup (${selectedFileName})?\n\nCurrent database will be replaced.\nAn emergency backup will be created first.`)) {
+                console.log('[RESTORE] user cancelled confirm dialog');
                 return;
             }
 
+            console.log('[RESTORE] user confirmed, checking AndroidBridge');
             if (window.AndroidBridge && typeof window.AndroidBridge.restoreDatabase === 'function') {
                 try {
+                    console.log('[RESTORE] bridge entered, calling restoreDatabase:', selectedFileName);
                     doRestoreSelectedBtn.querySelector('.btn-loader').classList.remove('hidden');
                     doRestoreSelectedBtn.querySelector('.btn-text').textContent = 'Restoring...';
 
+                    console.log('[RESTORE] restore started');
                     const responseJson = window.AndroidBridge.restoreDatabase(selectedFileName);
+                    console.log('[RESTORE] raw restore response:', responseJson);
                     const response = JSON.parse(responseJson);
+                    console.log('[RESTORE] parsed restore response:', JSON.stringify(response));
 
                     if (response.status === 'success') {
+                        console.log('[RESTORE] restore completed successfully');
                         alert("Restore successful! App will now reload.");
                         window.location.reload();
                     } else {
+                        console.log('[RESTORE] restore failed:', response.message);
                         alert("Restore failed: " + (response.message || "Unknown error"));
                         doRestoreSelectedBtn.querySelector('.btn-loader').classList.add('hidden');
                         doRestoreSelectedBtn.querySelector('.btn-text').textContent = 'Restore Selected';
                     }
                 } catch (e) {
-                    console.error("Restore error", e);
+                    console.error('[RESTORE] restore exception:', e);
                     alert("Restore error: " + e.message);
                     doRestoreSelectedBtn.querySelector('.btn-loader').classList.add('hidden');
                     doRestoreSelectedBtn.querySelector('.btn-text').textContent = 'Restore Selected';
                 }
             } else {
+                console.log('[RESTORE] no AndroidBridge.restoreDatabase, showing alert');
                 alert("Restore is only available on Android app.");
             }
         });
+    } else {
+        console.log('[RESTORE] DEAD END: doRestoreSelectedBtn or availableBackupsSelect is null, restore click handler NOT wired');
     }
 
     // Segmented Toggle Logic

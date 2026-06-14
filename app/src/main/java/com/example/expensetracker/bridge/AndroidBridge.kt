@@ -29,20 +29,25 @@ class AndroidBridge(
 
     @JavascriptInterface
     fun backupDatabase(): String {
-        Log.d("AndroidBridge", "backupDatabase called")
+        Log.d("AndroidBridge", "[BACKUP] backupDatabase called")
+        Log.d("AndroidBridge", "[BACKUP] backup started, type=MANUAL")
         val result = backupManager.createBackup(BackupType.MANUAL)
         val response = JSONObject()
         if (result is BackupResult.Success) {
+            Log.d("AndroidBridge", "[BACKUP] backup completed successfully")
+            Log.d("AndroidBridge", "[BACKUP] backupPath=${result.backupPath}")
+            Log.d("AndroidBridge", "[BACKUP] backupFile=${result.backupFileName}")
             response.put("status", "success")
             response.put("message", "Restore point created")
             response.put("backupPath", result.backupPath)
             response.put("backupFile", result.backupFileName)
             response.put("timestamp", result.timestamp)
         } else if (result is BackupResult.Failure) {
-            Log.e("AndroidBridge", "Manual backup failed: ${result.errorMessage}")
+            Log.e("AndroidBridge", "[BACKUP] backup failed: ${result.errorMessage}")
             response.put("status", "error")
             response.put("message", result.errorMessage)
         }
+        Log.d("AndroidBridge", "[BACKUP] returning JSON: ${response.toString()}")
         return response.toString()
     }
 
@@ -405,12 +410,13 @@ class AndroidBridge(
 
     @JavascriptInterface
     fun getAvailableBackups(): String {
-        Log.d("AndroidBridge", "getAvailableBackups called")
+        Log.d("AndroidBridge", "[RESTORE] getAvailableBackups called")
         return try {
             val backups = restoreManager.getAvailableBackups()
-            Log.d("AndroidBridge", "Found ${backups.size} available backups")
+            Log.d("AndroidBridge", "[RESTORE] found ${backups.size} available backups")
             val jsonArray = JSONArray()
             for (backup in backups) {
+                Log.d("AndroidBridge", "[RESTORE] backup: ${backup.fileName} type=${backup.backupType} size=${backup.sizeBytes}")
                 val obj = JSONObject()
                 obj.put("fileName", backup.fileName)
                 obj.put("backupType", backup.backupType)
@@ -418,32 +424,36 @@ class AndroidBridge(
                 obj.put("sizeBytes", backup.sizeBytes)
                 jsonArray.put(obj)
             }
-            jsonArray.toString()
+            val result = jsonArray.toString()
+            Log.d("AndroidBridge", "[RESTORE] returning JSON array with ${backups.size} entries")
+            result
         } catch (e: Exception) {
-            Log.e("AndroidBridge", "getAvailableBackups error", e)
+            Log.e("AndroidBridge", "[RESTORE] getAvailableBackups error", e)
             "[]"
         }
     }
 
     @JavascriptInterface
     fun restoreDatabase(fileName: String): String {
-        Log.d("AndroidBridge", "restoreDatabase called")
-        Log.d("AndroidBridge", "restoreDatabase called: $fileName")
+        Log.d("AndroidBridge", "[RESTORE] restoreDatabase called")
+        Log.d("AndroidBridge", "[RESTORE] fileName=$fileName")
         val response = JSONObject()
         return try {
+            Log.d("AndroidBridge", "[RESTORE] calling restoreManager.restoreDatabase()")
             val success = restoreManager.restoreDatabase(fileName)
             if (success) {
-                Log.d("AndroidBridge", "Restore successfully completed for: $fileName")
+                Log.d("AndroidBridge", "[RESTORE] restore completed successfully for: $fileName")
                 response.put("status", "success")
                 response.put("message", "Database successfully restored")
             } else {
-                Log.e("AndroidBridge", "Restore failed for: $fileName")
+                Log.e("AndroidBridge", "[RESTORE] restore failed for: $fileName")
                 response.put("status", "error")
                 response.put("message", "Restore failed during validation or file replacement.")
             }
+            Log.d("AndroidBridge", "[RESTORE] returning JSON: ${response.toString()}")
             response.toString()
         } catch (e: Exception) {
-            Log.e("AndroidBridge", "restoreDatabase error", e)
+            Log.e("AndroidBridge", "[RESTORE] restoreDatabase exception", e)
             response.put("status", "error")
             response.put("message", e.message ?: "Unknown error")
             response.toString()
