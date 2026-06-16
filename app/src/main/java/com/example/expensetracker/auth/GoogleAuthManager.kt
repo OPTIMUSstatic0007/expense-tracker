@@ -7,6 +7,9 @@ import com.google.android.gms.auth.api.signin.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.android.gms.common.api.ApiException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class GoogleAuthManager(
     private val context: Context
@@ -25,6 +28,31 @@ class GoogleAuthManager(
 
     private val googleSignInClient =
         GoogleSignIn.getClient(context, gso)
+
+    // ═══ AUTH STATE MANAGEMENT ═══
+    private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
+    val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    private val authStateListener = FirebaseAuth.AuthStateListener { auth ->
+        val user = auth.currentUser
+        _authState.value = if (user != null) {
+            AuthState.Authenticated(user)
+        } else {
+            AuthState.Unauthenticated
+        }
+    }
+
+    init {
+        // Set initial state based on existing session
+        val currentUser = firebaseAuth.currentUser
+        _authState.value = if (currentUser != null) {
+            AuthState.Authenticated(currentUser)
+        } else {
+            AuthState.Unauthenticated
+        }
+        // Listen for future auth state changes (sign in / sign out)
+        firebaseAuth.addAuthStateListener(authStateListener)
+    }
 
     fun getSignInIntent(): Intent {
         return googleSignInClient.signInIntent

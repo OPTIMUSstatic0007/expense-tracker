@@ -12,31 +12,67 @@ let isLoadingMore = false;
 
 // ═══════════════════════════════════════════════════════════════════
 // THEME MANAGEMENT
+// Single source of truth: AndroidBridge (SharedPreferences) when
+// running inside the Android WebView; falls back to localStorage
+// for desktop/browser preview.
 // ═══════════════════════════════════════════════════════════════════
-function initTheme() {
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+/**
+ * Apply a theme to the page. Called from:
+ * 1. Android via evaluateJavascript("applyTheme('dark')")
+ * 2. initTheme() on page load
+ * 3. toggleTheme() on drawer button click
+ */
+function applyTheme(mode) {
+    if (mode === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
     } else {
         document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+    }
+    // Refresh to pick up new theme colors in charts
+    if (typeof refreshData === 'function') {
+        refreshData();
+    }
+}
+
+function initTheme() {
+    // When running inside Android WebView, ask the bridge for the
+    // persisted theme (SharedPreferences) so we stay in sync.
+    if (window.AndroidBridge && typeof window.AndroidBridge.getTheme === 'function') {
+        try {
+            var bridgeTheme = window.AndroidBridge.getTheme();
+            applyTheme(bridgeTheme);
+            return;
+        } catch (e) {
+            console.warn('AndroidBridge.getTheme() failed, falling back to localStorage', e);
+        }
+    }
+    // Fallback: localStorage (desktop/browser)
+    var savedTheme = localStorage.getItem('theme');
+    var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+        applyTheme('dark');
+    } else {
+        applyTheme('light');
     }
 }
 
 function toggleTheme() {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    if (isDark) {
-        document.documentElement.removeAttribute('data-theme');
-        localStorage.setItem('theme', 'light');
-    } else {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        localStorage.setItem('theme', 'dark');
-    }
-
-    // Refresh to pick up new theme colors in charts
-    if (typeof refreshData === 'function') {
-        refreshData();
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    var nextMode = isDark ? 'light' : 'dark';
+    
+    // 1. Optimistic UI update for instant feedback
+    applyTheme(nextMode);
+    
+    // 2. Sync state with native Android app
+    if (window.AndroidBridge && window.AndroidBridge.setTheme) {
+        try {
+            window.AndroidBridge.setTheme(nextMode);
+        } catch (e) {
+            console.warn('AndroidBridge.setTheme() failed', e);
+        }
     }
 }
 
@@ -372,6 +408,17 @@ function setupNavDrawer() {
     if (!hamburgerBtn || !navDrawer || !navDrawerScrim) return;
 
 
+    // Settings link → open native Settings/Profile screen
+    const drawerSettingsLink = document.getElementById('drawer-settings-link');
+    if (drawerSettingsLink) {
+        drawerSettingsLink.addEventListener('click', () => {
+            closeNavDrawer();
+            if (window.AndroidBridge && typeof window.AndroidBridge.openSettings === 'function') {
+                window.AndroidBridge.openSettings();
+            }
+        });
+    }
+
     const themeToggleBtn = document.getElementById('theme-toggle-btn');
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener('click', () => {
@@ -519,42 +566,61 @@ function setupNavDrawer() {
         }
     }
 
-    // 3. Restore Database — triggers existing file input
+    // 3. Restore Database — mobile restore UI in DB Center panel
     const drawerRestoreBtn = document.getElementById('drawer-restore-btn');
     console.log('[RESTORE] drawer-restore-btn element found:', !!drawerRestoreBtn);
     if (drawerRestoreBtn) {
+        let selectedBackupFileName = null;
+        let backupsData = [];
+        let showingCount = 5;
+
         drawerRestoreBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('[RESTORE] drawer-restore-btn clicked');
-            
+            console.log('[RESTORE_UI] drawer-restore-btn clicked');
+
             let ui = document.getElementById('mobile-restore-ui');
             if (!ui) {
                 ui = document.createElement('div');
                 ui.id = 'mobile-restore-ui';
-                ui.style.marginTop = '16px';
-                ui.style.padding = '12px';
-                ui.style.background = 'var(--background)';
-                ui.style.borderRadius = 'var(--border-radius-md)';
-                ui.style.border = '1px solid var(--border)';
-                ui.style.display = 'none';
+                ui.style.cssText = 'margin-top: 16px; padding: 16px; background: var(--background); border-radius: 12px; border: 1px solid var(--border); display: none;';
                 ui.innerHTML = `
-                    <h4 style="margin-bottom: 8px; font-size: 0.875rem; color: var(--text-primary);">Select Backup to Restore</h4>
-                    <select id="mobile-backup-select" style="width: 100%; margin-bottom: 12px; padding: 8px; border-radius: 4px; background: var(--surface); color: var(--text-primary); border: 1px solid var(--border); font-size: 0.875rem;"></select>
-                    <button id="mobile-do-restore-btn" class="btn-primary" style="width: 100%; padding: 10px; font-size: 0.875rem;">
+                    <h4 style="margin-bottom: 14px; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">Select Backup to Restore</h4>
+                    <div id="backup-list-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; max-height: 600px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+                    <button id="show-more-backups-btn" class="btn-outline" style="position: relative !important; width: 100%; padding: 10px; font-size: 0.8rem; margin-bottom: 12px; display: none; bottom: auto; border-radius: 8px;">Show More</button>
+                    <button id="mobile-do-restore-btn" class="btn-primary" style="position: relative !important; width: 100%; padding: 12px; font-size: 0.875rem; bottom: auto; margin-bottom: 0; border-radius: 8px; opacity: 0.5;" disabled>
                         <span class="btn-text">Restore Selected</span>
                         <span class="btn-loader hidden" style="margin-left: 8px;"></span>
                     </button>
                 `;
-                drawerRestoreBtn.parentElement.appendChild(ui);
-                
+                // Append outside the .db-center-card to avoid overflow:hidden clipping
+                const operationsCard = drawerRestoreBtn.closest('.db-center-card');
+                if (operationsCard && operationsCard.parentElement) {
+                    operationsCard.parentElement.insertBefore(ui, operationsCard.nextSibling);
+                } else {
+                    drawerRestoreBtn.parentElement.appendChild(ui);
+                }
+
+                document.getElementById('show-more-backups-btn').addEventListener('click', () => {
+                    console.log('[RESTORE_UI] show more clicked, expanding to 15');
+                    showingCount = 15;
+                    renderBackups();
+                });
+
                 document.getElementById('mobile-do-restore-btn').addEventListener('click', () => {
-                    const selectedFileName = document.getElementById('mobile-backup-select').value;
-                    if (!selectedFileName) {
-                        showToast("Please select a backup.", "error");
+                    if (!selectedBackupFileName) return;
+                    console.log('[RESTORE_UI] restore requested=' + selectedBackupFileName);
+
+                    // Custom confirmation dialog
+                    if (!confirm(
+                        'Restore backup\n\n' +
+                        selectedBackupFileName + '\n\n' +
+                        'Current database will be replaced.\n' +
+                        'An emergency backup will be created first.'
+                    )) {
+                        console.log('[RESTORE_UI] user cancelled restore');
                         return;
                     }
-                    if (!confirm(`Restore backup (${selectedFileName})?\n\nCurrent database will be replaced.\nAn emergency backup will be created first.`)) return;
 
                     if (window.AndroidBridge && typeof window.AndroidBridge.restoreDatabase === 'function') {
                         const btn = document.getElementById('mobile-do-restore-btn');
@@ -563,56 +629,164 @@ function setupNavDrawer() {
                         textSpan.innerText = 'Restoring...';
                         loader.classList.remove('hidden');
                         btn.disabled = true;
-                        
+                        btn.style.opacity = '0.5';
+
                         setTimeout(() => {
                             try {
-                                const responseJson = window.AndroidBridge.restoreDatabase(selectedFileName);
+                                console.log('[RESTORE_UI] calling AndroidBridge.restoreDatabase(' + selectedBackupFileName + ')');
+                                const responseJson = window.AndroidBridge.restoreDatabase(selectedBackupFileName);
+                                console.log('[RESTORE_UI] restore response raw:', responseJson);
                                 const response = JSON.parse(responseJson);
+                                console.log('[RESTORE_UI] restore response parsed:', JSON.stringify(response));
+
                                 if (response.status === 'success') {
-                                    showToast("Restore successful! Reloading...", "success");
+                                    console.log('[RESTORE_UI] restore completed');
+                                    showToast('Database restored successfully! Reloading...', 'success');
+                                    // Refresh metrics and ledger before reload
+                                    if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
+                                    if (typeof fetchDbStats === 'function') fetchDbStats();
                                     setTimeout(() => window.location.reload(), 1500);
                                 } else {
-                                    showToast("Restore failed: " + response.message, "error");
+                                    console.log('[RESTORE_UI] restore failed:', response.message);
+                                    showToast('Restore failed: ' + (response.message || 'Unknown error'), 'error');
                                     textSpan.innerText = 'Restore Selected';
                                     loader.classList.add('hidden');
                                     btn.disabled = false;
+                                    btn.style.opacity = '1';
                                 }
                             } catch (e) {
-                                showToast("Restore error: " + e.message, "error");
+                                console.error('[RESTORE_UI] restore exception:', e);
+                                showToast('Restore error: ' + e.message, 'error');
                                 textSpan.innerText = 'Restore Selected';
                                 loader.classList.add('hidden');
                                 btn.disabled = false;
+                                btn.style.opacity = '1';
                             }
                         }, 100);
+                    } else {
+                        console.log('[RESTORE_UI] no AndroidBridge.restoreDatabase available');
+                        showToast('Restore is only available on Android', 'error');
                     }
                 });
             }
 
-            const selectEl = document.getElementById('mobile-backup-select');
-            selectEl.innerHTML = '';
-            if (window.AndroidBridge && typeof window.AndroidBridge.getAvailableBackups === 'function') {
-                try {
-                    const backupsJson = window.AndroidBridge.getAvailableBackups();
-                    const backups = JSON.parse(backupsJson);
-                    if (backups.length === 0) {
-                        selectEl.innerHTML = '<option value="" disabled selected>No backups available</option>';
-                    } else {
-                        backups.forEach(backup => {
-                            const opt = document.createElement('option');
-                            opt.value = backup.fileName;
-                            const date = new Date(backup.timestamp);
-                            opt.textContent = `${backup.fileName} (${backup.backupType}, ${(backup.sizeBytes / 1024).toFixed(1)} KB) - ${date.toLocaleString()}`;
-                            selectEl.appendChild(opt);
-                        });
-                    }
-                } catch (e) {
-                    selectEl.innerHTML = '<option value="" disabled selected>Error loading backups</option>';
+            function renderBackups() {
+                const container = document.getElementById('backup-list-container');
+                if (!container) return;
+                container.innerHTML = '';
+                const displayList = backupsData.slice(0, showingCount);
+                console.log('[RESTORE_UI] showing latest backups count=' + displayList.length);
+
+                if (displayList.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.875rem; padding: 16px 0; text-align: center;">No backups available</div>';
+                    document.getElementById('show-more-backups-btn').style.display = 'none';
+                    return;
                 }
-            } else {
-                selectEl.innerHTML = '<option value="" disabled selected>Not available on Desktop</option>';
+
+                displayList.forEach((backup, index) => {
+                    const date = new Date(backup.timestamp);
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const formattedDate = date.getDate().toString().padStart(2, '0') + ' ' +
+                        months[date.getMonth()] + ' ' +
+                        date.getFullYear() + ' ' +
+                        date.getHours().toString().padStart(2, '0') + ':' +
+                        date.getMinutes().toString().padStart(2, '0');
+                    const sizeStr = (backup.sizeBytes / 1024).toFixed(1) + ' KB';
+
+                    let typeLabel = 'Unknown Backup';
+                    let typeColor = 'var(--text-secondary)';
+                    let typeBg = 'var(--surface-alt, rgba(0,0,0,0.04))';
+                    if (backup.backupType === 'manual') {
+                        typeLabel = 'Manual Backup';
+                        typeColor = '#4A90E2';
+                        typeBg = 'rgba(74, 144, 226, 0.1)';
+                    } else if (backup.backupType === 'auto') {
+                        typeLabel = 'Auto Backup';
+                        typeColor = '#50C878';
+                        typeBg = 'rgba(80, 200, 120, 0.1)';
+                    } else if (backup.backupType === 'emergency') {
+                        typeLabel = 'Emergency Backup';
+                        typeColor = '#E8913A';
+                        typeBg = 'rgba(232, 145, 58, 0.1)';
+                    }
+
+                    const isSelected = selectedBackupFileName === backup.fileName;
+                    const card = document.createElement('div');
+                    card.style.cssText = `
+                        min-height: 110px;
+                        padding: 16px;
+                        border-radius: 10px;
+                        border: ${isSelected ? '2px solid #4A90E2' : '1px solid var(--border)'};
+                        background: ${isSelected ? 'rgba(74, 144, 226, 0.06)' : 'var(--surface)'};
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                        flex-shrink: 0;
+                        box-sizing: border-box;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                    `;
+
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                            <div style="display: inline-flex; align-items: center; gap: 6px;">
+                                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${typeColor}; flex-shrink: 0;"></span>
+                                <span style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary);">${typeLabel}</span>
+                            </div>
+                            ${isSelected ? '<span style="font-size: 0.7rem; font-weight: 600; color: #4A90E2; background: rgba(74, 144, 226, 0.1); padding: 2px 8px; border-radius: 4px;">SELECTED</span>' : ''}
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px;">${formattedDate}</div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.8; word-break: break-all; padding-right: 8px; line-height: 1.4;">${backup.fileName}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">${sizeStr}</div>
+                        </div>
+                    `;
+
+                    card.addEventListener('click', () => {
+                        console.log('[RESTORE_UI] selected backup=' + backup.fileName);
+                        selectedBackupFileName = backup.fileName;
+                        renderBackups();
+                        const restoreBtn = document.getElementById('mobile-do-restore-btn');
+                        if (restoreBtn) {
+                            restoreBtn.disabled = false;
+                            restoreBtn.style.opacity = '1';
+                        }
+                    });
+
+                    container.appendChild(card);
+                });
+
+                const showMoreBtn = document.getElementById('show-more-backups-btn');
+                if (showMoreBtn) {
+                    showMoreBtn.style.display = backupsData.length > showingCount ? 'block' : 'none';
+                }
             }
-            
-            ui.style.display = ui.style.display === 'none' ? 'block' : 'none';
+
+            // Toggle panel open/closed
+            if (ui.style.display === 'none') {
+                selectedBackupFileName = null;
+                showingCount = 5;
+                if (window.AndroidBridge && typeof window.AndroidBridge.getAvailableBackups === 'function') {
+                    try {
+                        backupsData = JSON.parse(window.AndroidBridge.getAvailableBackups());
+                        console.log('[RESTORE_UI] loaded backups count=' + backupsData.length);
+                    } catch (e) {
+                        backupsData = [];
+                        console.error('[RESTORE_UI] error loading backups:', e);
+                    }
+                }
+                const restoreBtn = document.getElementById('mobile-do-restore-btn');
+                if (restoreBtn) {
+                    restoreBtn.disabled = true;
+                    restoreBtn.style.opacity = '0.5';
+                }
+                renderBackups();
+                ui.style.display = 'block';
+                // Scroll the restore panel into view
+                setTimeout(() => ui.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+            } else {
+                ui.style.display = 'none';
+            }
         });
     }
 
