@@ -24,8 +24,19 @@ class AndroidBridge(
     private val repository: LocalRepository,
     private val backupManager: BackupManager,
     private val restoreManager: RestoreManager,
-    private val context: Context
+    private val context: Context,
+    private val onOpenSettings: (() -> Unit)? = null
 ) {
+
+    /**
+     * Called from WebView JavaScript when the user taps the
+     * Settings / Account item in the navigation drawer.
+     */
+    @JavascriptInterface
+    fun openSettings() {
+        Log.d("AndroidBridge", "[SETTINGS] openSettings called from WebView")
+        onOpenSettings?.invoke()
+    }
 
     @JavascriptInterface
     fun backupDatabase(): String {

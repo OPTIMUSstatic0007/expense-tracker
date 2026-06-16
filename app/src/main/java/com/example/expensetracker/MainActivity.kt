@@ -3,8 +3,12 @@ package com.example.expensetracker
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
 import com.example.expensetracker.auth.GoogleAuthManager
+import com.example.expensetracker.auth.AuthState
 import com.example.expensetracker.backup.BackupManager
 import com.example.expensetracker.backup.RestoreManager
+import com.example.expensetracker.ui.screens.LoginScreen
+import com.example.expensetracker.ui.screens.SettingsScreen
+import com.example.expensetracker.ui.navigation.Screen
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -16,6 +20,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
@@ -41,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +68,9 @@ class MainActivity : ComponentActivity() {
     // Use "http://10.0.2.2:8080" for Android Emulator to host PC
     private val APP_URL = "file:///android_asset/index.html"
     private lateinit var googleAuthManager: GoogleAuthManager
+
+    // Navigation state — which screen to show when authenticated
+    private val currentScreen = mutableStateOf(Screen.Dashboard)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,52 +106,103 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             ExpenseTrackerTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    // Request Notification Permission for API 33+ to show Download Progress
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val permissionLauncher = rememberLauncherForActivityResult(
-                            ActivityResultContracts.RequestPermission()
-                        ) { isGranted ->
-                            Log.d("ExpenseTracker", "Notification permission granted: $isGranted")
-                        }
-                        LaunchedEffect(Unit) {
-                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                // Collect auth state reactively
+                val authState by googleAuthManager.authState.collectAsState()
+
+                // Sign-in loading & error state for LoginScreen
+                var isSigningIn by remember { mutableStateOf(false) }
+                var signInError by remember { mutableStateOf<String?>(null) }
+
+                // Reset signing-in state when auth state changes to Authenticated
+                LaunchedEffect(authState) {
+                    if (authState is AuthState.Authenticated) {
+                        isSigningIn = false
+                        signInError = null
+                        currentScreen.value = Screen.Dashboard
+                    }
+                }
+
+                when (val state = authState) {
+                    is AuthState.Loading -> {
+                        // Full-screen loading while checking session
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
                         }
                     }
 
-                    Column(
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-
-                        Button(
-                            onClick = {
-
-                                val signInIntent =
-                                    googleAuthManager.getSignInIntent()
-
+                    is AuthState.Unauthenticated -> {
+                        LoginScreen(
+                            isLoading = isSigningIn,
+                            errorMessage = signInError,
+                            onSignInClick = {
+                                isSigningIn = true
+                                signInError = null
+                                val signInIntent = googleAuthManager.getSignInIntent()
                                 googleSignInLauncher.launch(signInIntent)
                             }
-                        ) {
-
-                            Text("Test Google Sign In")
-                        }
-                        Button(
-                            onClick = {
-                                googleAuthManager.signOut()
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    "Signed out",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        ) {
-                            Text("Sign Out")
-                        }
-
-                        ExpenseTrackerWebView(
-                            url = APP_URL,
-                            modifier = Modifier.fillMaxSize()
                         )
+                    }
+
+                    is AuthState.Authenticated -> {
+                        val screen = currentScreen.value
+
+                        when (screen) {
+                            Screen.Dashboard -> {
+                                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                                    // Request Notification Permission for API 33+ to show Download Progress
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        val permissionLauncher = rememberLauncherForActivityResult(
+                                            ActivityResultContracts.RequestPermission()
+                                        ) { isGranted ->
+                                            Log.d("ExpenseTracker", "Notification permission granted: $isGranted")
+                                        }
+                                        LaunchedEffect(Unit) {
+                                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                        }
+                                    }
+
+                                    ExpenseTrackerWebView(
+                                        url = APP_URL,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(innerPadding),
+                                        onOpenSettings = {
+                                            // AndroidBridge calls from a background thread,
+                                            // must switch to main thread for Compose state update
+                                            Handler(Looper.getMainLooper()).post {
+                                                currentScreen.value = Screen.Settings
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+
+                            Screen.Settings -> {
+                                SettingsScreen(
+                                    user = state.user,
+                                    onSignOut = {
+                                        googleAuthManager.signOut()
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "Signed out",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    onBack = {
+                                        currentScreen.value = Screen.Dashboard
+                                    }
+                                )
+                            }
+
+                            Screen.Login -> {
+                                // Should not happen when authenticated,
+                                // but handle gracefully
+                                currentScreen.value = Screen.Dashboard
+                            }
+                        }
                     }
                 }
             }
@@ -151,7 +212,11 @@ class MainActivity : ComponentActivity() {
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
+fun ExpenseTrackerWebView(
+    url: String,
+    modifier: Modifier = Modifier,
+    onOpenSettings: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -229,7 +294,10 @@ fun ExpenseTrackerWebView(url: String, modifier: Modifier = Modifier) {
                     val repository = LocalRepository(context)
                     val backupManager = BackupManager(context, database)
                     val restoreManager = RestoreManager(context, database, backupManager)
-                    addJavascriptInterface(AndroidBridge(repository, backupManager, restoreManager, context), "AndroidBridge")
+                    addJavascriptInterface(
+                        AndroidBridge(repository, backupManager, restoreManager, context, onOpenSettings),
+                        "AndroidBridge"
+                    )
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {

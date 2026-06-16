@@ -372,6 +372,17 @@ function setupNavDrawer() {
     if (!hamburgerBtn || !navDrawer || !navDrawerScrim) return;
 
 
+    // Settings link → open native Settings/Profile screen
+    const drawerSettingsLink = document.getElementById('drawer-settings-link');
+    if (drawerSettingsLink) {
+        drawerSettingsLink.addEventListener('click', () => {
+            closeNavDrawer();
+            if (window.AndroidBridge && typeof window.AndroidBridge.openSettings === 'function') {
+                window.AndroidBridge.openSettings();
+            }
+        });
+    }
+
     const themeToggleBtn = document.getElementById('theme-toggle-btn');
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener('click', () => {
