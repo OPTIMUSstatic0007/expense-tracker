@@ -21,12 +21,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.expensetracker.ui.theme.ThemeMode
 import com.google.firebase.auth.FirebaseUser
 
 /**
- * Settings / profile screen showing user info and sign-out.
+ * Settings / profile screen showing user info, theme selector, and sign-out.
  *
  * @param user The currently authenticated FirebaseUser.
+ * @param themeMode The current theme mode from ThemeManager.
+ * @param onThemeChange Callback when the user picks a new theme mode.
  * @param onSignOut Callback to trigger sign-out.
  * @param onBack Callback to navigate back to the dashboard.
  */
@@ -34,6 +37,8 @@ import com.google.firebase.auth.FirebaseUser
 @Composable
 fun SettingsScreen(
     user: FirebaseUser,
+    themeMode: ThemeMode,
+    onThemeChange: (ThemeMode) -> Unit,
     onSignOut: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -132,11 +137,51 @@ fun SettingsScreen(
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ═══ THEME SELECTOR ═══
+            Text(
+                text = "Appearance",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 3-option segmented row: Light | Dark | System
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val options = listOf(
+                    ThemeMode.LIGHT to "Light",
+                    ThemeMode.DARK to "Dark",
+                    ThemeMode.SYSTEM to "System"
+                )
+                options.forEachIndexed { index, (mode, label) ->
+                    SegmentedButton(
+                        selected = themeMode == mode,
+                        onClick = { onThemeChange(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = options.size
+                        )
+                    ) {
+                        Text(label)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Spacer(modifier = Modifier.height(32.dp))
 
             // Sign out button
             OutlinedButton(

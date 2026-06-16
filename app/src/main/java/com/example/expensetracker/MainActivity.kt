@@ -9,6 +9,8 @@ import com.example.expensetracker.backup.RestoreManager
 import com.example.expensetracker.ui.screens.LoginScreen
 import com.example.expensetracker.ui.screens.SettingsScreen
 import com.example.expensetracker.ui.navigation.Screen
+import com.example.expensetracker.ui.theme.ThemeManager
+import com.example.expensetracker.ui.theme.ThemeMode
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -34,6 +36,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -68,6 +71,7 @@ class MainActivity : ComponentActivity() {
     // Use "http://10.0.2.2:8080" for Android Emulator to host PC
     private val APP_URL = "file:///android_asset/index.html"
     private lateinit var googleAuthManager: GoogleAuthManager
+    private lateinit var themeManager: ThemeManager
 
     // Navigation state — which screen to show when authenticated
     private val currentScreen = mutableStateOf(Screen.Dashboard)
@@ -78,6 +82,7 @@ class MainActivity : ComponentActivity() {
         WebView.setWebContentsDebuggingEnabled(true)
         enableEdgeToEdge()
         googleAuthManager = GoogleAuthManager(this)
+        themeManager = ThemeManager(this)
 
         val googleSignInLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
@@ -105,7 +110,12 @@ class MainActivity : ComponentActivity() {
             )
         }
         setContent {
-            ExpenseTrackerTheme {
+            // Collect theme state from the single source of truth
+            val themeMode by themeManager.themeMode.collectAsState()
+            val isSystemDark = isSystemInDarkTheme()
+            val isDark = themeManager.isDark(isSystemDark)
+
+            ExpenseTrackerTheme(darkTheme = isDark) {
                 // Collect auth state reactively
                 val authState by googleAuthManager.authState.collectAsState()
 
@@ -169,6 +179,8 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .padding(innerPadding),
+                                        themeManager = themeManager,
+                                        isDark = isDark,
                                         onOpenSettings = {
                                             // AndroidBridge calls from a background thread,
                                             // must switch to main thread for Compose state update
@@ -183,6 +195,8 @@ class MainActivity : ComponentActivity() {
                             Screen.Settings -> {
                                 SettingsScreen(
                                     user = state.user,
+                                    themeMode = themeMode,
+                                    onThemeChange = { mode -> themeManager.setTheme(mode) },
                                     onSignOut = {
                                         googleAuthManager.signOut()
                                         Toast.makeText(
@@ -215,6 +229,8 @@ class MainActivity : ComponentActivity() {
 fun ExpenseTrackerWebView(
     url: String,
     modifier: Modifier = Modifier,
+    themeManager: ThemeManager? = null,
+    isDark: Boolean = false,
     onOpenSettings: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -295,7 +311,7 @@ fun ExpenseTrackerWebView(
                     val backupManager = BackupManager(context, database)
                     val restoreManager = RestoreManager(context, database, backupManager)
                     addJavascriptInterface(
-                        AndroidBridge(repository, backupManager, restoreManager, context, onOpenSettings),
+                        AndroidBridge(repository, backupManager, restoreManager, context, themeManager ?: ThemeManager(context), onOpenSettings),
                         "AndroidBridge"
                     )
 
@@ -307,6 +323,16 @@ fun ExpenseTrackerWebView(
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             isLoading = false
+                            // Push the current theme into the WebView after page load
+                            val currentTheme = if (themeManager?.isDark(
+                                    (context.resources.configuration.uiMode
+                                            and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                                            android.content.res.Configuration.UI_MODE_NIGHT_YES
+                                ) == true) "dark" else "light"
+                            view?.evaluateJavascript(
+                                "if(typeof applyTheme==='function'){applyTheme('$currentTheme');}",
+                                null
+                            )
                         }
 
                         override fun onReceivedError(
@@ -371,6 +397,16 @@ fun ExpenseTrackerWebView(
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // Push live theme updates to the WebView whenever isDark changes
+        // (e.g. user switches theme from SettingsScreen or drawer)
+        LaunchedEffect(isDark) {
+            val themeName = if (isDark) "dark" else "light"
+            webViewInstance?.evaluateJavascript(
+                "if(typeof applyTheme==='function'){applyTheme('$themeName');}",
+                null
+            )
+        }
 
         if (isLoading) {
             CircularProgressIndicator(

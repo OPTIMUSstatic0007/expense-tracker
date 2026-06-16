@@ -12,32 +12,68 @@ let isLoadingMore = false;
 
 // ═══════════════════════════════════════════════════════════════════
 // THEME MANAGEMENT
+// Single source of truth: AndroidBridge (SharedPreferences) when
+// running inside the Android WebView; falls back to localStorage
+// for desktop/browser preview.
 // ═══════════════════════════════════════════════════════════════════
-function initTheme() {
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-        document.documentElement.removeAttribute('data-theme');
-    }
-}
-
-function toggleTheme() {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    if (isDark) {
-        document.documentElement.removeAttribute('data-theme');
-        localStorage.setItem('theme', 'light');
-    } else {
+/**
+ * Apply a theme to the page. Called from:
+ * 1. Android via evaluateJavascript("applyTheme('dark')")
+ * 2. initTheme() on page load
+ * 3. toggleTheme() on drawer button click
+ */
+function applyTheme(mode) {
+    if (mode === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
         localStorage.setItem('theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
     }
-
     // Refresh to pick up new theme colors in charts
     if (typeof refreshData === 'function') {
         refreshData();
     }
+}
+
+function initTheme() {
+    // When running inside Android WebView, ask the bridge for the
+    // persisted theme (SharedPreferences) so we stay in sync.
+    if (window.AndroidBridge && typeof window.AndroidBridge.getTheme === 'function') {
+        try {
+            var bridgeTheme = window.AndroidBridge.getTheme();
+            applyTheme(bridgeTheme);
+            return;
+        } catch (e) {
+            console.warn('AndroidBridge.getTheme() failed, falling back to localStorage', e);
+        }
+    }
+    // Fallback: localStorage (desktop/browser)
+    var savedTheme = localStorage.getItem('theme');
+    var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+        applyTheme('dark');
+    } else {
+        applyTheme('light');
+    }
+}
+
+function toggleTheme() {
+    // Route through AndroidBridge when available so the native side
+    // (Compose screens, SharedPreferences) stays in sync.
+    if (window.AndroidBridge && typeof window.AndroidBridge.toggleTheme === 'function') {
+        try {
+            window.AndroidBridge.toggleTheme();
+            // The native side will call applyTheme() back via evaluateJavascript
+            return;
+        } catch (e) {
+            console.warn('AndroidBridge.toggleTheme() failed, falling back to local toggle', e);
+        }
+    }
+    // Fallback: local toggle (desktop/browser)
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    applyTheme(isDark ? 'light' : 'dark');
 }
 
 initTheme();

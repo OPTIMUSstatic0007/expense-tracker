@@ -1,6 +1,8 @@
 package com.example.expensetracker.bridge
 
 import android.webkit.JavascriptInterface
+import com.example.expensetracker.ui.theme.ThemeManager
+import com.example.expensetracker.ui.theme.ThemeMode
 import com.example.expensetracker.backup.BackupManager
 import android.util.Log
 import com.example.expensetracker.repository.LocalRepository
@@ -25,6 +27,7 @@ class AndroidBridge(
     private val backupManager: BackupManager,
     private val restoreManager: RestoreManager,
     private val context: Context,
+    private val themeManager: ThemeManager,
     private val onOpenSettings: (() -> Unit)? = null
 ) {
 
@@ -36,6 +39,53 @@ class AndroidBridge(
     fun openSettings() {
         Log.d("AndroidBridge", "[SETTINGS] openSettings called from WebView")
         onOpenSettings?.invoke()
+    }
+
+    // ═══ THEME BRIDGE ═══
+
+    /**
+     * Called from WebView JS to toggle the theme (LIGHT↔DARK).
+     */
+    @JavascriptInterface
+    fun toggleTheme() {
+        Log.d("AndroidBridge", "[THEME] toggleTheme called from WebView")
+        val isSystemDark = (context.resources.configuration.uiMode
+                and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+        themeManager.toggleTheme(isSystemDark)
+    }
+
+    /**
+     * Returns the currently resolved theme as "dark" or "light".
+     * Called from WebView JS on page load to sync initial state.
+     */
+    @JavascriptInterface
+    fun getTheme(): String {
+        val isSystemDark = (context.resources.configuration.uiMode
+                and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val resolved = if (themeManager.isDark(isSystemDark)) "dark" else "light"
+        Log.d("AndroidBridge", "[THEME] getTheme → $resolved (mode=${themeManager.themeMode.value})")
+        return resolved
+    }
+
+    /**
+     * Sets the theme mode from WebView JS.
+     * Accepts "light", "dark", or "system".
+     */
+    @JavascriptInterface
+    fun setTheme(mode: String) {
+        Log.d("AndroidBridge", "[THEME] setTheme called with: $mode")
+        val themeMode = when (mode.lowercase()) {
+            "light" -> ThemeMode.LIGHT
+            "dark" -> ThemeMode.DARK
+            "system" -> ThemeMode.SYSTEM
+            else -> {
+                Log.w("AndroidBridge", "[THEME] Unknown theme mode: $mode, ignoring")
+                return
+            }
+        }
+        themeManager.setTheme(themeMode)
     }
 
     @JavascriptInterface
