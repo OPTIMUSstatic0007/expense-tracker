@@ -60,20 +60,20 @@ function initTheme() {
 }
 
 function toggleTheme() {
-    // Route through AndroidBridge when available so the native side
-    // (Compose screens, SharedPreferences) stays in sync.
-    if (window.AndroidBridge && typeof window.AndroidBridge.toggleTheme === 'function') {
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    var nextMode = isDark ? 'light' : 'dark';
+    
+    // 1. Optimistic UI update for instant feedback
+    applyTheme(nextMode);
+    
+    // 2. Sync state with native Android app
+    if (window.AndroidBridge && window.AndroidBridge.setTheme) {
         try {
-            window.AndroidBridge.toggleTheme();
-            // The native side will call applyTheme() back via evaluateJavascript
-            return;
+            window.AndroidBridge.setTheme(nextMode);
         } catch (e) {
-            console.warn('AndroidBridge.toggleTheme() failed, falling back to local toggle', e);
+            console.warn('AndroidBridge.setTheme() failed', e);
         }
     }
-    // Fallback: local toggle (desktop/browser)
-    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    applyTheme(isDark ? 'light' : 'dark');
 }
 
 initTheme();
