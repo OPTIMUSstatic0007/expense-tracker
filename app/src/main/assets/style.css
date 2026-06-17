@@ -2134,6 +2134,11 @@ body {
     .db-center-sync-badge.sync-pending { color: var(--warning); }
     .db-center-sync-badge.sync-error { color: var(--danger); }
 
+    /* Backup health badge colors */
+    .db-center-health-badge.health-ok { color: var(--success); }
+    .db-center-health-badge.health-warning { color: var(--warning); }
+    .db-center-health-badge.health-neutral { color: var(--text-secondary); }
+
     /* ═══ End DB Center Panel ══════════════════════════════ */
 
     /* Footer — compact on mobile now that mgmt section is hidden */

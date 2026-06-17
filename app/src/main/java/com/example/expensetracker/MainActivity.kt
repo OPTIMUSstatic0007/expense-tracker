@@ -64,6 +64,8 @@ import com.example.expensetracker.ui.theme.ExpenseTrackerTheme
 import com.example.expensetracker.local.ExpenseDatabase
 import com.example.expensetracker.repository.LocalRepository
 import com.example.expensetracker.bridge.AndroidBridge
+import com.example.expensetracker.backup.BackupLifecycleManager
+import kotlin.concurrent.thread
 
 class MainActivity : ComponentActivity() {
     
@@ -309,11 +311,22 @@ fun ExpenseTrackerWebView(
                     val database = ExpenseDatabase.getInstance(context)
                     val repository = LocalRepository(context)
                     val backupManager = BackupManager(context, database)
-                    val restoreManager = RestoreManager(context, database, backupManager)
+                    val lifecycleManager = BackupLifecycleManager(context, backupManager)
+                    val restoreManager = RestoreManager(context, database, backupManager, lifecycleManager)
                     addJavascriptInterface(
-                        AndroidBridge(repository, backupManager, restoreManager, context, themeManager ?: ThemeManager(context), onOpenSettings),
+                        AndroidBridge(repository, backupManager, restoreManager, lifecycleManager, context, themeManager ?: ThemeManager(context), onOpenSettings),
                         "AndroidBridge"
                     )
+
+                    // Change 2: Launch startup maintenance asynchronously after Room init.
+                    // Never blocks UI rendering or first interaction.
+                    thread(start = true, isDaemon = true, name = "BackupLifecycleMaintenance") {
+                        try {
+                            lifecycleManager.runStartupMaintenance()
+                        } catch (e: Exception) {
+                            android.util.Log.e("BackupLifecycle", "Startup maintenance failed", e)
+                        }
+                    }
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {

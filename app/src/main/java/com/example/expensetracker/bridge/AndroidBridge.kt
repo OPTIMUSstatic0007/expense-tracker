@@ -18,6 +18,7 @@ import java.util.Locale
 import com.example.expensetracker.backup.BackupType
 import com.example.expensetracker.backup.BackupResult
 import com.example.expensetracker.backup.RestoreManager
+import com.example.expensetracker.backup.BackupLifecycleManager
 import java.io.File
 import android.content.Context
 import java.util.Date
@@ -26,6 +27,7 @@ class AndroidBridge(
     private val repository: LocalRepository,
     private val backupManager: BackupManager,
     private val restoreManager: RestoreManager,
+    private val lifecycleManager: BackupLifecycleManager,
     private val context: Context,
     private val themeManager: ThemeManager,
     private val onOpenSettings: (() -> Unit)? = null
@@ -98,6 +100,7 @@ class AndroidBridge(
             Log.d("AndroidBridge", "[BACKUP] backup completed successfully")
             Log.d("AndroidBridge", "[BACKUP] backupPath=${result.backupPath}")
             Log.d("AndroidBridge", "[BACKUP] backupFile=${result.backupFileName}")
+            lifecycleManager.onBackupCreated(result, BackupType.MANUAL)
             response.put("status", "success")
             response.put("message", "Restore point created")
             response.put("backupPath", result.backupPath)
@@ -401,7 +404,12 @@ class AndroidBridge(
                 repository.insertTransaction(entity)
 
                 try {
-                    backupManager.createBackup(BackupType.AUTO)
+                    if (lifecycleManager.shouldAllowBackup(BackupType.AUTO)) {
+                        val backupResult = backupManager.createBackup(BackupType.AUTO)
+                        if (backupResult is BackupResult.Success) {
+                            lifecycleManager.onBackupCreated(backupResult, BackupType.AUTO)
+                        }
+                    }
                 } catch (be: Exception) {
                     Log.e("AndroidBridge", "Auto backup failed during addTransaction", be)
                 }
@@ -449,7 +457,12 @@ class AndroidBridge(
                     repository.updateTransaction(entity)
 
                     try {
-                        backupManager.createBackup(BackupType.AUTO)
+                        if (lifecycleManager.shouldAllowBackup(BackupType.AUTO)) {
+                            val backupResult = backupManager.createBackup(BackupType.AUTO)
+                            if (backupResult is BackupResult.Success) {
+                                lifecycleManager.onBackupCreated(backupResult, BackupType.AUTO)
+                            }
+                        }
                     } catch (be: Exception) {
                         Log.e("AndroidBridge", "Auto backup failed during updateTransaction", be)
                     }
@@ -478,7 +491,12 @@ class AndroidBridge(
                 repository.softDeleteTransaction(id)
 
                 try {
-                    backupManager.createBackup(BackupType.AUTO)
+                    if (lifecycleManager.shouldAllowBackup(BackupType.AUTO)) {
+                        val backupResult = backupManager.createBackup(BackupType.AUTO)
+                        if (backupResult is BackupResult.Success) {
+                            lifecycleManager.onBackupCreated(backupResult, BackupType.AUTO)
+                        }
+                    }
                 } catch (be: Exception) {
                     Log.e("AndroidBridge", "Auto backup failed during deleteTransaction", be)
                 }
@@ -545,6 +563,64 @@ class AndroidBridge(
             response.put("status", "error")
             response.put("message", e.message ?: "Unknown error")
             response.toString()
+        }
+    }
+
+    // ═══ LIFECYCLE MANAGER BRIDGE ═══
+
+    /**
+     * Runs retention enforcement + cleanup.
+     * Returns a structured CleanupReport as JSON.
+     * Change 5: shows toast + refreshes metrics after cleanup.
+     */
+    @JavascriptInterface
+    fun runCleanup(): String {
+        Log.d("AndroidBridge", "[LIFECYCLE] runCleanup called")
+        return try {
+            val report = lifecycleManager.enforceRetentionPolicy()
+            Log.d("AndroidBridge", "[LIFECYCLE] cleanup complete: ${report.filesRemoved} files removed")
+            report.toJson().toString()
+        } catch (e: Exception) {
+            Log.e("AndroidBridge", "[LIFECYCLE] runCleanup error", e)
+            val error = JSONObject()
+            error.put("filesRemoved", 0)
+            error.put("storageRecovered", "0 B")
+            error.put("storageRecoveredBytes", 0)
+            error.put("backupsRemaining", 0)
+            error.put("errors", org.json.JSONArray().put(e.message ?: "Unknown error"))
+            error.toString()
+        }
+    }
+
+    /**
+     * Returns comprehensive backup lifecycle statistics as JSON.
+     */
+    @JavascriptInterface
+    fun getLifecycleStats(): String {
+        Log.d("AndroidBridge", "[LIFECYCLE] getLifecycleStats called")
+        return try {
+            val stats = lifecycleManager.getLifecycleStats()
+            stats.toJson().toString()
+        } catch (e: Exception) {
+            Log.e("AndroidBridge", "[LIFECYCLE] getLifecycleStats error", e)
+            JSONObject().put("totalBackups", 0).put("healthLabel", "Error").put("healthStatus", "error").toString()
+        }
+    }
+
+    /**
+     * Runs integrity verification on all backups.
+     * Per Change 4: corrupted backups are marked, not deleted.
+     */
+    @JavascriptInterface
+    fun verifyBackupIntegrity(): String {
+        Log.d("AndroidBridge", "[LIFECYCLE] verifyBackupIntegrity called")
+        return try {
+            val report = lifecycleManager.verifyAllBackups()
+            Log.d("AndroidBridge", "[LIFECYCLE] integrity check: ${report.healthyCount} healthy, ${report.corruptedCount} corrupted")
+            report.toJson().toString()
+        } catch (e: Exception) {
+            Log.e("AndroidBridge", "[LIFECYCLE] verifyBackupIntegrity error", e)
+            JSONObject().put("totalChecked", 0).put("error", e.message).toString()
         }
     }
 }

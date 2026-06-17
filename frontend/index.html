@@ -1,3 +1,4 @@
+<!-- RUNTIME TEST 999 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,19 +6,266 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Household Ledger | Daily Expense Tracker</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapgit pull origin mainis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-container">
+            <button id="hamburger-btn" class="hamburger-btn" aria-label="Open navigation menu" aria-expanded="false">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
             <span class="brand">Household<span class="brand-sub">Ledger</span></span>
             <div class="user-profile">
                 <span>Daily Cash Track</span>
             </div>
         </div>
     </nav>
+
+    <!-- ═══ MOBILE NAVIGATION DRAWER (hidden on desktop) ═══ -->
+    <div id="nav-drawer-scrim" class="nav-drawer-scrim" aria-hidden="true"></div>
+    <aside id="nav-drawer" class="nav-drawer" aria-hidden="true" role="navigation">
+        <div class="nav-drawer-header">
+            <span class="nav-drawer-brand">Household<span class="brand-sub">Ledger</span></span>
+            <button id="nav-drawer-close" class="nav-drawer-close" aria-label="Close navigation menu">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+        <div class="nav-drawer-body">
+            <!-- DATABASE Section — navigation link only -->
+            <div class="nav-drawer-section">
+                <div class="nav-drawer-section-title">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                    Database
+                </div>
+                <button id="drawer-db-center-link" class="nav-drawer-item nav-drawer-link-btn">
+                    <span>Database Center</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+            </div>
+            <!-- SYSTEM Section — minimal info -->
+            <div class="nav-drawer-section">
+                <div class="nav-drawer-section-title">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                    System
+                </div>
+                <div class="drawer-status-grid">
+                    <div class="drawer-status-row">
+                        <span class="drawer-status-label">Sync Status</span>
+                        <span class="drawer-status-value drawer-sync-indicator" id="drawer-sync-status">—</span>
+                    </div>
+                    <div class="drawer-status-row">
+                        <span class="drawer-status-label">App Version</span>
+                        <span class="drawer-status-value" id="drawer-app-version">v1.0</span>
+                    </div>
+                </div>
+            </div>
+            <!-- ANALYTICS Section -->
+            <div class="nav-drawer-section">
+                <div class="nav-drawer-section-title">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+                    Insights
+                </div>
+                <button id="drawer-analytics-link" class="nav-drawer-item nav-drawer-link-btn">
+                    <span>Analytics</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+            </div>
+
+            <!-- ACCOUNT Section -->
+            <div class="nav-drawer-section">
+                <div class="nav-drawer-section-title">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    Account
+                </div>
+                <button id="drawer-settings-link" class="nav-drawer-item nav-drawer-link-btn">
+                    <span>Settings</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+                <button id="theme-toggle-btn" class="nav-drawer-item nav-drawer-link-btn">
+                    <span>Theme</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="nav-drawer-footer">
+            <span>ExpenseTracker <span class="nav-drawer-version">v1.0</span></span>
+        </div>
+    </aside>
+
+    <!-- ═══ MOBILE ANALYTICS PANEL (hidden on desktop) ═══ -->
+    <div id="analytics-scrim" class="db-center-scrim" aria-hidden="true"></div>
+    <aside id="analytics-panel" class="db-center-panel" aria-hidden="true">
+        <div class="db-center-header">
+            <div class="db-center-header-left">
+                <button id="analytics-close" class="db-center-back-btn" aria-label="Close Analytics">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                <h2>Analytics</h2>
+            </div>
+        </div>
+        <div class="db-center-body analytics-body">
+            <!-- Smart Insight Cards -->
+            <div class="analytics-insights-grid">
+                <div class="insight-card">
+                    <div class="insight-title">Highest Spend</div>
+                    <div class="insight-value" id="insight-highest-spend-cat">—</div>
+                    <div class="insight-sub" id="insight-highest-spend-val">₹0</div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-title">Avg Daily Spend</div>
+                    <div class="insight-value" id="insight-avg-daily">₹0</div>
+                    <div class="insight-sub" id="insight-avg-daily-sub">This Month</div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-title">Savings Rate</div>
+                    <div class="insight-value" id="insight-savings">0%</div>
+                    <div class="insight-sub" id="insight-savings-sub">Of Total Income</div>
+                </div>
+            </div>
+
+            <!-- Chart 1: Monthly Expense Trend -->
+            <div class="db-center-card analytics-chart-card">
+                <div class="db-center-card-title">Monthly Expense Trend</div>
+                <div class="chart-container">
+                    <canvas id="monthlyTrendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: Category Breakdown -->
+            <div class="db-center-card analytics-chart-card">
+                <div class="db-center-card-title">Category Breakdown (Expenses)</div>
+                <div class="chart-container">
+                    <canvas id="categoryBreakdownChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 3: Income vs Expense -->
+            <div class="db-center-card analytics-chart-card">
+                <div class="db-center-card-title">Income vs Expense</div>
+                <div class="chart-container">
+                    <canvas id="incomeVsExpenseChart"></canvas>
+                </div>
+            </div>
+
+            <div class="analytics-loader hidden" id="analytics-loader">
+                <div class="spinner"></div> Loading Analytics...
+            </div>
+        </div>
+    </aside>
+
+    <!-- ═══ MOBILE DB CENTER PANEL (hidden on desktop) ═══ -->
+    <div id="db-center-scrim" class="db-center-scrim" aria-hidden="true"></div>
+    <aside id="db-center-panel" class="db-center-panel" aria-hidden="true">
+        <div class="db-center-header">
+            <div class="db-center-header-left">
+                <button id="db-center-close" class="db-center-back-btn" aria-label="Close Database Center">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                <h2>Database Center</h2>
+            </div>
+        </div>
+        <div class="db-center-body">
+            <!-- SECTION 1 — Operations -->
+            <div class="db-center-card">
+                <div class="db-center-card-title">Operations</div>
+                <button id="drawer-snapshot-btn" class="db-center-action-btn">
+                    <div class="db-center-action-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    </div>
+                    <div class="db-center-action-content">
+                        <span class="db-center-action-text">Create Restore Point</span>
+                        <span class="db-center-action-desc">Save current database state</span>
+                    </div>
+                    <span class="drawer-action-loader hidden"></span>
+                </button>
+                <button id="drawer-backup-btn" class="db-center-action-btn">
+                    <div class="db-center-action-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    </div>
+                    <div class="db-center-action-content">
+                        <span class="db-center-action-text">Backup Database</span>
+                        <span class="db-center-action-desc">Create manual internal backup</span>
+                    </div>
+                </button>
+                <button id="drawer-restore-btn" class="db-center-action-btn">
+                    <div class="db-center-action-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    </div>
+                    <div class="db-center-action-content">
+                        <span class="db-center-action-text">Restore Database</span>
+                        <span class="db-center-action-desc">Upload and replace from backup</span>
+                    </div>
+                </button>
+                <button id="drawer-cleanup-btn" class="db-center-action-btn db-center-action-danger">
+                    <div class="db-center-action-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+                    </div>
+                    <div class="db-center-action-content">
+                        <span class="db-center-action-text">Cleanup Old Records</span>
+                        <span class="db-center-action-desc">Remove outdated entries</span>
+                    </div>
+                </button>
+            </div>
+            <!-- SECTION 2 — Database Metrics -->
+            <div class="db-center-card">
+                <div class="db-center-card-title">Database Metrics</div>
+                <div class="db-center-metrics-grid">
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Total Transactions</span>
+                        <span class="db-center-metric-value" id="dbcenter-total-txns">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Database Size</span>
+                        <span class="db-center-metric-value" id="dbcenter-db-size">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Last Backup</span>
+                        <span class="db-center-metric-value" id="dbcenter-last-backup">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Total Backups</span>
+                        <span class="db-center-metric-value" id="dbcenter-total-backups">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Backup Storage</span>
+                        <span class="db-center-metric-value" id="dbcenter-backup-storage">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Backup Health</span>
+                        <span class="db-center-metric-value db-center-health-badge" id="dbcenter-backup-health">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Auto / Manual / Emergency</span>
+                        <span class="db-center-metric-value" id="dbcenter-backup-breakdown">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Last Export</span>
+                        <span class="db-center-metric-value" id="dbcenter-last-export">—</span>
+                    </div>
+                    <div class="db-center-metric db-center-metric-full">
+                        <span class="db-center-metric-label">Sync Status</span>
+                        <span class="db-center-metric-value db-center-sync-badge" id="dbcenter-sync-status">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
 
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-container"></div>
@@ -57,16 +305,21 @@
             <!-- Main Panel: Ledger & Filters -->
             <div class="main-panel">
 
-                <!-- Mobile Inline Form (mobile only, replaces modal on small screens) -->
-                <div id="mobile-inline-form" class="mobile-inline-form-wrapper" aria-hidden="true">
-                    <section class="form-section mobile-inline-card">
-                        <div class="section-header">
-                            <h2 id="mobile-modal-title">Record New Entry</h2>
-                            <button id="mobile-form-close" class="btn-close" aria-label="Close inline form">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                <!-- ═══ MOBILE INLINE FORM (replaces modal on ≤768px) ═══
+                     Hidden by default via CSS max-height:0.
+                     JS moves #exp-form into .mobile-inline-body on open.
+                     No overlay · No fixed position · No z-index stacking. -->
+                <div id="mobile-inline-form" class="mobile-inline-wrapper" aria-hidden="true">
+                    <div class="mobile-inline-card">
+                        <div class="mobile-inline-header">
+                            <h2 id="mobile-form-title">Record New Entry</h2>
+                            <button id="mobile-form-close" class="btn-close" aria-label="Close form">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             </button>
                         </div>
-                    </section>
+                        <!-- form#exp-form is moved here by JS on mobile open -->
+                        <div class="mobile-inline-body"></div>
+                    </div>
                 </div>
 
                 <!-- Filters & Search Bar -->
@@ -85,6 +338,23 @@
                                 <span class="btn-text">CSV</span>
                                 <span class="btn-loader hidden"></span>
                             </button>
+                        </div>
+
+                        <!-- ═══ MOBILE OVERFLOW MENU (hidden on desktop) ═══ -->
+                        <div id="overflow-menu-anchor" class="overflow-menu-anchor">
+                            <button id="overflow-menu-btn" class="overflow-btn" aria-label="More options" aria-expanded="false">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                            </button>
+                            <div id="overflow-dropdown" class="overflow-dropdown" aria-hidden="true">
+                                <button class="overflow-item" data-export="excel">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                    Export Excel
+                                </button>
+                                <button class="overflow-item" data-export="csv">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                    Export CSV
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="filters-grid">
@@ -204,11 +474,20 @@
                     <span class="btn-text">Download Backup (.db)</span>
                     <span class="btn-loader hidden"></span>
                 </button>
-                <button id="restore-db-btn" class="btn-outline">
-                    <span class="btn-text">Restore from File</span>
-                    <span class="btn-loader hidden"></span>
-                </button>
-                <input type="file" id="restore-input" accept=".db" class="hidden">
+            </div>
+
+            <!-- Available Backups List -->
+            <div class="mgmt-backups" style="margin-top: 1rem; background: var(--card-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                <h3>Available Backups</h3>
+                <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                    <select id="available-backups-select" style="flex: 1; padding: 0.5rem; border-radius: 4px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-primary);">
+                        <option value="" disabled selected>No backups available</option>
+                    </select>
+                    <button id="do-restore-selected-btn" class="btn-primary" style="padding: 0.5rem 1rem;">
+                        <span class="btn-text">Restore Selected</span>
+                        <span class="btn-loader hidden"></span>
+                    </button>
+                </div>
             </div>
         </section>
     </main>
@@ -234,13 +513,9 @@
                     </button>
                 </div>
                 <form id="exp-form" class="transaction-form" novalidate>
-                    <div class="input-grid">
-                        <div class="field">
-                            <label for="date">Date</label>
-                            <input type="date" id="date" required>
-                            <span class="error-msg" id="date-error"></span>
-                        </div>
-                        <div class="field">
+                    <div class="form-header-section">
+                        <!-- Hidden select to keep existing JS logic intact -->
+                        <div class="field hidden-field" style="display: none;">
                             <label for="type">Entry Type</label>
                             <select id="type" required>
                                 <option value="Debit">Expense (-)</option>
@@ -248,52 +523,91 @@
                             </select>
                             <span class="error-msg" id="type-error"></span>
                         </div>
-                        <div class="field">
-                            <label for="amount">Amount (₹)</label>
-                            <input type="number" id="amount" step="0.01" min="0.01" placeholder="0.00" required>
-                            <span class="error-msg" id="amount-error"></span>
+
+                        <div class="segmented-toggle" id="type-toggle">
+                            <button type="button" class="toggle-btn active" data-value="Debit">Expense</button>
+                            <button type="button" class="toggle-btn" data-value="Credit">Income</button>
                         </div>
-                        <div class="field">
-                            <label for="category">Category</label>
-                            <select id="category" required>
-                                <option value="" disabled selected>Select Category</option>
-                                <option value="Groceries">Groceries</option>
-                                <option value="Electricity">Electricity</option>
-                                <option value="Water">Water</option>
-                                <option value="Gas">Gas</option>
-                                <option value="Maintenance">Maintenance</option>
-                                <option value="Salary">Salary</option>
-                                <option value="Deposit">Deposit</option>
-                                <option value="Medical">Medical</option>
-                                <option value="Rent">Rent</option>
-                                <option value="Miscellaneous">Miscellaneous</option>
-                            </select>
-                            <span class="error-msg" id="category-error"></span>
+
+                        <div class="amount-wrapper">
+                            <span class="currency-symbol">₹</span>
+                            <input type="number" id="amount" step="0.01" min="0.01" placeholder="0" required>
                         </div>
-                        <div class="field">
-                            <label for="source">Expense Type</label>
-                            <input type="text" id="source" placeholder="e.g. Cash, UPI" required>
-                            <span class="error-msg" id="source-error"></span>
-                        </div>
-                        <div class="field">
-                            <label for="person">Paid To / From</label>
-                            <input type="text" id="person" placeholder="Name">
-                            <span class="error-msg" id="person-error"></span>
+                        <span class="error-msg" id="amount-error"></span>
+
+                        <div class="quick-chips" id="quick-amount-chips">
+                            <button type="button" class="chip" data-amount="100">+100</button>
+                            <button type="button" class="chip" data-amount="500">+500</button>
+                            <button type="button" class="chip" data-amount="1000">+1k</button>
+                            <button type="button" class="chip" data-amount="2000">+2k</button>
                         </div>
                     </div>
-                    <div class="field notes-field">
-                        <label for="notes">Notes / Reference</label>
-                        <textarea id="notes" rows="2" placeholder="Reference details..."></textarea>
+
+                    <div class="input-grid compact-grid">
+                        <div class="field-group-row">
+                            <div class="field flex-1">
+                                <label for="category">Category</label>
+                                <select id="category" required>
+                                    <option value="" disabled selected>Select Category</option>
+                                    <option value="Groceries">Groceries</option>
+                                    <option value="Electricity">Electricity</option>
+                                    <option value="Water">Water</option>
+                                    <option value="Gas">Gas</option>
+                                    <option value="Maintenance">Maintenance</option>
+                                    <option value="Salary">Salary</option>
+                                    <option value="Deposit">Deposit</option>
+                                    <option value="Medical">Medical</option>
+                                    <option value="Rent">Rent</option>
+                                    <option value="Miscellaneous">Miscellaneous</option>
+                                </select>
+                                <span class="error-msg" id="category-error"></span>
+                            </div>
+                            <div class="field flex-1">
+                                <label for="date">Date</label>
+                                <input type="date" id="date" required>
+                                <span class="error-msg" id="date-error"></span>
+                            </div>
+                        </div>
                     </div>
-                    <button type="submit" id="save-btn" class="btn-primary">
-                        <span id="save-btn-text">Save to Ledger</span>
-                        <span class="btn-loader hidden"></span>
-                    </button>
+
+                    <div class="collapsible-section">
+                        <button type="button" class="collapsible-header" id="details-toggle">
+                            <span>Additional Details</span>
+                            <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="collapsible-content" id="details-content">
+                            <div class="input-grid">
+                                <div class="field">
+                                    <label for="source">Expense Type</label>
+                                    <input type="text" id="source" placeholder="e.g. Cash, UPI" required>
+                                    <span class="error-msg" id="source-error"></span>
+                                </div>
+                                <div class="field">
+                                    <label for="person">Paid To / From</label>
+                                    <input type="text" id="person" placeholder="Name">
+                                    <span class="error-msg" id="person-error"></span>
+                                </div>
+                            </div>
+                            <div class="field notes-field">
+                                <label for="notes">Notes / Reference</label>
+                                <textarea id="notes" rows="2" placeholder="Reference details..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions sticky-actions">
+                        <button type="button" class="btn-secondary" id="cancel-btn">Cancel</button>
+                        <button type="submit" id="save-btn" class="btn-primary">
+                            <span id="save-btn-text">Save to Ledger</span>
+                            <span class="btn-loader hidden"></span>
+                        </button>
+                    </div>
                 </form>
             </section>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

@@ -15,7 +15,8 @@ data class BackupInfo(
 class RestoreManager(
     private val context: Context,
     private val database: ExpenseDatabase,
-    private val backupManager: BackupManager
+    private val backupManager: BackupManager,
+    private val lifecycleManager: BackupLifecycleManager? = null
 ) {
 
     fun getAvailableBackups(): List<BackupInfo> {
@@ -89,6 +90,7 @@ class RestoreManager(
         }
         if (emergencyBackupResult is BackupResult.Success) {
             Log.d("RestoreManager", "[RESTORE] emergency snapshot completed: ${emergencyBackupResult.backupPath}")
+            lifecycleManager?.onBackupCreated(emergencyBackupResult, BackupType.EMERGENCY)
         }
 
         // 2. Discover backup file
@@ -173,6 +175,7 @@ class RestoreManager(
 
             if (isOk) {
                 Log.d("RestoreManager", "[RESTORE] integrity check PASSED — restore completed")
+                lifecycleManager?.onRestoreCompleted()
             } else {
                 Log.e("RestoreManager", "[RESTORE] integrity check FAILED")
             }

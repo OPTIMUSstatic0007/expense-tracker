@@ -790,11 +790,27 @@ function setupNavDrawer() {
         });
     }
 
-    // 4. Cleanup Old Records — placeholder (no backend API)
+    // 4. Cleanup Old Records — Lifecycle Manager cleanup
     const drawerCleanupBtn = document.getElementById('drawer-cleanup-btn');
     if (drawerCleanupBtn) {
         drawerCleanupBtn.addEventListener('click', () => {
-            showToast('Cleanup feature coming soon', 'info');
+            if (window.AndroidBridge && typeof window.AndroidBridge.runCleanup === 'function') {
+                try {
+                    const resultJson = window.AndroidBridge.runCleanup();
+                    const report = JSON.parse(resultJson);
+                    const msg = `Cleanup Complete\nRecovered ${report.storageRecovered || '0 B'}\nRemoved ${report.filesRemoved || 0} backups`;
+                    showToast(msg, 'success');
+                    // Change 5: immediately refresh Database Center metrics
+                    fetchDbStats();
+                    fetchLifecycleStats();
+                    refreshAvailableBackups();
+                } catch (e) {
+                    console.error('[LIFECYCLE] cleanup error:', e);
+                    showToast('Cleanup failed: ' + e.message, 'error');
+                }
+            } else {
+                showToast('Cleanup is only available on Android app', 'info');
+            }
         });
     }
 
@@ -1736,6 +1752,7 @@ function openDbCenter() {
 
     // Fetch live stats every time panel opens
     fetchDbStats();
+    fetchLifecycleStats();
     if (typeof window.refreshBackupMetrics === 'function') {
         window.refreshBackupMetrics();
     }
@@ -1887,6 +1904,80 @@ async function fetchDbStats() {
     // Last Export — client-side tracked (no backend API for this)
     if (els.lastExport) {
         els.lastExport.innerText = lastExportTime || 'Never';
+    }
+}
+
+/**
+ * Fetches backup lifecycle statistics from AndroidBridge.getLifecycleStats().
+ * Populates the new DB Center metrics: total backups, storage, health, breakdown.
+ */
+function fetchLifecycleStats() {
+    const els = {
+        totalBackups:     document.getElementById('dbcenter-total-backups'),
+        backupStorage:    document.getElementById('dbcenter-backup-storage'),
+        backupHealth:     document.getElementById('dbcenter-backup-health'),
+        backupBreakdown:  document.getElementById('dbcenter-backup-breakdown'),
+    };
+
+    if (window.AndroidBridge && typeof window.AndroidBridge.getLifecycleStats === 'function') {
+        try {
+            const statsJson = window.AndroidBridge.getLifecycleStats();
+            const stats = JSON.parse(statsJson);
+
+            // Total Backups
+            if (els.totalBackups) {
+                els.totalBackups.innerText = (stats.totalBackups || 0).toLocaleString();
+            }
+
+            // Backup Storage
+            if (els.backupStorage) {
+                const bytes = parseInt(stats.totalBackupStorageBytes, 10) || 0;
+                if (bytes >= 1048576) {
+                    els.backupStorage.innerText = `${(bytes / 1048576).toFixed(1)} MB`;
+                } else if (bytes >= 1024) {
+                    els.backupStorage.innerText = `${(bytes / 1024).toFixed(0)} KB`;
+                } else {
+                    els.backupStorage.innerText = `${bytes} B`;
+                }
+            }
+
+            // Backup Health
+            if (els.backupHealth) {
+                els.backupHealth.className = 'db-center-metric-value db-center-health-badge';
+                const healthStatus = stats.healthStatus || 'neutral';
+                const healthLabel = stats.healthLabel || 'Unknown';
+                if (healthStatus === 'ok') {
+                    els.backupHealth.innerText = '● ' + healthLabel;
+                    els.backupHealth.classList.add('health-ok');
+                } else if (healthStatus === 'warning') {
+                    els.backupHealth.innerText = '● ' + healthLabel;
+                    els.backupHealth.classList.add('health-warning');
+                } else {
+                    els.backupHealth.innerText = healthLabel;
+                    els.backupHealth.classList.add('health-neutral');
+                }
+            }
+
+            // Breakdown: Auto / Manual / Emergency
+            if (els.backupBreakdown) {
+                const a = stats.autoBackupCount || 0;
+                const m = stats.manualBackupCount || 0;
+                const e = stats.emergencyBackupCount || 0;
+                els.backupBreakdown.innerText = `${a} / ${m} / ${e}`;
+            }
+        } catch (e) {
+            console.error('fetchLifecycleStats error', e);
+            if (els.totalBackups)    els.totalBackups.innerText = 'Unavailable';
+            if (els.backupStorage)   els.backupStorage.innerText = 'Unavailable';
+            if (els.backupHealth)    els.backupHealth.innerText = 'Unavailable';
+            if (els.backupBreakdown) els.backupBreakdown.innerText = 'Unavailable';
+        }
+    } else {
+        // Desktop mode — no lifecycle stats
+        if (els.totalBackups)    els.totalBackups.innerText = '—';
+        if (els.backupStorage)   els.backupStorage.innerText = '—';
+        if (els.backupHealth)    els.backupHealth.innerText = '—';
+        if (els.backupBreakdown) els.backupBreakdown.innerText = '—';
     }
 }
 
