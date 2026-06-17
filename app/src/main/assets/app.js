@@ -1418,12 +1418,12 @@ async function loadAnalyticsData() {
     if (loader) loader.classList.remove('hidden');
 
     try {
-        const response = await fetch(`${API_BASE_URL}/all`);
-        if (!response.ok) throw new Error('Failed to fetch analytics data');
-        const data = await response.json();
+        const raw = window.AndroidBridge.getAllTransactionsForAnalytics();
+        const data = JSON.parse(raw);
 
         processAnalyticsData(data);
     } catch (e) {
+        console.error('Analytics load error:', e);
         showToast('Failed to load analytics', 'error');
     } finally {
         if (loader) loader.classList.add('hidden');

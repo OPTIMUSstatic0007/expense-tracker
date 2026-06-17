@@ -269,6 +269,37 @@ class AndroidBridge(
         return sdf.format(timestamp)
     }
 
+    /**
+     * Shared helper: converts a TransactionEntity into the JSON shape
+     * that the WebView JS expects (entryType, date, parsed note fields, etc.).
+     * Callers can add extra fields (e.g. balanceAfter) on the returned object.
+     */
+    private fun serializeTransaction(entity: TransactionEntity): JSONObject {
+        val obj = JSONObject()
+        obj.put("id", entity.id)
+        obj.put("amount", entity.amount)
+        obj.put("entryType", entity.type)
+        obj.put("category", entity.category)
+        obj.put("date", formatDate(entity.createdAt))
+
+        var expenseType = ""
+        var paidTo = ""
+        var notes = ""
+        try {
+            val noteObj = JSONObject(entity.note)
+            expenseType = noteObj.optString("expenseType", "")
+            paidTo = noteObj.optString("paidTo", "")
+            notes = noteObj.optString("notes", "")
+        } catch (e: Exception) {
+            notes = entity.note
+        }
+
+        obj.put("expenseType", expenseType)
+        obj.put("paidTo", paidTo)
+        obj.put("notes", notes)
+        return obj
+    }
+
     @JavascriptInterface
     fun getTransactions(page: Int, limit: Int): String {
         Log.d("AndroidBridge", "getTransactions called page=$page limit=$limit")
@@ -304,35 +335,9 @@ class AndroidBridge(
             }
 
             val jsonArray = JSONArray()
-            // Iterate strictly through newest-first paged list
             for (entity in pagedEntities) {
-                val obj = JSONObject()
-                obj.put("id", entity.id)
-                obj.put("amount", entity.amount)
-                obj.put("entryType", entity.type)
-                obj.put("category", entity.category)
-                obj.put("date", formatDate(entity.createdAt))
-
-                // Parse note for extra fields
-                var expenseType = ""
-                var paidTo = ""
-                var notes = ""
-                try {
-                    val noteObj = JSONObject(entity.note)
-                    expenseType = noteObj.optString("expenseType", "")
-                    paidTo = noteObj.optString("paidTo", "")
-                    notes = noteObj.optString("notes", "")
-                } catch (e: Exception) {
-                    // Fallback to raw note
-                    notes = entity.note
-                }
-
-                obj.put("expenseType", expenseType)
-                obj.put("paidTo", paidTo)
-                obj.put("notes", notes)
-
+                val obj = serializeTransaction(entity)
                 obj.put("balanceAfter", balances[entity.id] ?: 0.0)
-
                 jsonArray.put(obj)
             }
 
@@ -344,6 +349,28 @@ class AndroidBridge(
             result.put("totalDebit", totalDebit)
 
             result.toString()
+        }
+    }
+
+    /**
+     * Returns ALL non-deleted transactions as a flat JSON array for analytics.
+     * No pagination, no running balance — analytics processes everything client-side.
+     */
+    @JavascriptInterface
+    fun getAllTransactionsForAnalytics(): String {
+        Log.d("AndroidBridge", "getAllTransactionsForAnalytics called")
+        return runBlocking {
+            try {
+                val entities = repository.getAllTransactions().first().filter { !it.deleted }
+                val jsonArray = JSONArray()
+                for (entity in entities) {
+                    jsonArray.put(serializeTransaction(entity))
+                }
+                jsonArray.toString()
+            } catch (e: Exception) {
+                Log.e("AndroidBridge", "Error fetching analytics data", e)
+                "[]"
+            }
         }
     }
 
