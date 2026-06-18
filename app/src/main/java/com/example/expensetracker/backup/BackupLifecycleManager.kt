@@ -17,7 +17,12 @@ import java.util.Locale
  * Does NOT replace BackupManager (creation) or RestoreManager (restore).
  * Instead, it coordinates lifecycle concerns that neither currently handles.
  *
- * Uses a single metadata source (backup_meta.json) — no separate lifecycle file.
+ * ARCHITECTURE: The physical backup folders (auto/, manual/, emergency/) are
+ * the SINGLE SOURCE OF TRUTH. backup_meta.json is a cache/index only.
+ * If backup_meta.json is missing, corrupted, or inconsistent, the manager
+ * automatically reconstructs it from the filesystem with full integrity
+ * verification — no user interaction required.
+ *
  * Per Change 1: extends existing metadata rather than duplicating.
  */
 class BackupLifecycleManager(
@@ -49,22 +54,55 @@ class BackupLifecycleManager(
 
     /**
      * Loads the unified backup metadata from backup_meta.json.
-     * If the file is missing or corrupted, rebuilds from filesystem.
+     *
+     * backup_meta.json is a CACHE/INDEX — the filesystem is the source of truth.
+     * If the file is missing, corrupted, unparseable, or inconsistent,
+     * a full filesystem reconstruction is triggered automatically.
      */
     fun loadMetadata(): BackupLifecycleMetadata {
         return try {
             if (metadataFile.exists()) {
                 val json = metadataFile.readText()
+                if (json.isBlank()) {
+                    Log.w(TAG, "Metadata file is empty, rebuilding from filesystem")
+                    return rebuildMetadataFromFilesystem()
+                }
                 val obj = JSONObject(json)
-                BackupLifecycleMetadata.fromJson(obj)
+                val metadata = BackupLifecycleMetadata.fromJson(obj)
+
+                // Validate consistency: history size must match backupCount
+                if (!isMetadataConsistent(metadata)) {
+                    Log.w(TAG, "Metadata inconsistent (count=${metadata.backupCount}, " +
+                            "history=${metadata.history.size}), rebuilding from filesystem")
+                    return rebuildMetadataFromFilesystem()
+                }
+
+                metadata
             } else {
-                Log.d(TAG, "No metadata file found, creating empty metadata")
-                BackupLifecycleMetadata()
+                Log.d(TAG, "No metadata file found, rebuilding from filesystem")
+                rebuildMetadataFromFilesystem()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Metadata corrupted, rebuilding from filesystem: ${e.message}")
             rebuildMetadataFromFilesystem()
         }
+    }
+
+    /**
+     * Validates that loaded metadata is internally consistent.
+     * Returns false if the metadata is stale or structurally invalid.
+     */
+    private fun isMetadataConsistent(metadata: BackupLifecycleMetadata): Boolean {
+        // backupCount must match actual history size
+        if (metadata.backupCount != metadata.history.size) return false
+
+        // Every history entry must have a non-empty fileName and valid type
+        for (entry in metadata.history) {
+            if (entry.fileName.isBlank()) return false
+            if (entry.type !in listOf("auto", "manual", "emergency")) return false
+        }
+
+        return true
     }
 
     /**
@@ -82,31 +120,69 @@ class BackupLifecycleManager(
     }
 
     /**
-     * Rebuilds metadata entirely from filesystem when JSON is missing or corrupted.
+     * Rebuilds metadata entirely from filesystem when JSON is missing, corrupted, or invalid.
+     *
+     * This is the core reconstruction algorithm:
+     *   1. Scans files/backups/auto/, manual/, emergency/ directories
+     *   2. Registers every *.db file (ignores .db-wal, .db-shm)
+     *   3. Collects filename, type, timestamp, filesize, last modified
+     *   4. Runs integrity verification on each backup
+     *   5. Recalculates all counts, storage, and health metrics
+     *   6. Writes a fresh backup_meta.json
+     *
+     * No user interaction required — fully automatic.
      */
     private fun rebuildMetadataFromFilesystem(): BackupLifecycleMetadata {
-        Log.d(TAG, "Rebuilding metadata from filesystem scan")
+        Log.d(TAG, "Rebuilding metadata from filesystem scan (full reconstruction)")
         val history = mutableListOf<BackupHistoryEntry>()
 
         for (type in listOf("auto", "manual", "emergency")) {
             val typeDir = File(backupDir, type)
             if (typeDir.exists() && typeDir.isDirectory) {
-                typeDir.listFiles()?.filter { it.isFile && it.name.endsWith(".db") }?.forEach { file ->
-                    history.add(createHistoryEntryFromFile(file, type))
-                }
+                typeDir.listFiles()
+                    ?.filter { it.isFile && it.name.endsWith(".db") }
+                    ?.filterNot { it.name.endsWith(".db-wal") || it.name.endsWith(".db-shm") }
+                    ?.forEach { file ->
+                        val entry = createHistoryEntryFromFile(file, type)
+
+                        // Run integrity verification during reconstruction
+                        val health = verifyBackup(type, file.name)
+                        val verifiedEntry = entry.copy(
+                            integrityVerified = true,
+                            lastVerifiedAt = System.currentTimeMillis(),
+                            isCorrupted = health == BackupHealth.CORRUPTED || health == BackupHealth.EMPTY
+                        )
+
+                        history.add(verifiedEntry)
+                        Log.d(TAG, "Reconstructed: ${file.name} ($type) — ${health.name}")
+                    }
             }
         }
 
         val sorted = history.sortedByDescending { it.createdAt }
+
+        // Calculate total storage from scanned files
+        val totalStorage = sorted.sumOf { it.sizeBytes + (it.walSizeBytes ?: 0L) + (it.shmSizeBytes ?: 0L) }
+
         val metadata = BackupLifecycleMetadata(
             lastBackupTime = sorted.firstOrNull()?.createdAt ?: 0L,
             backupCount = sorted.size,
             lastBackupType = sorted.firstOrNull()?.type ?: "",
+            mainDbSize = sorted.firstOrNull()?.sizeBytes ?: 0L,
+            walSize = sorted.firstOrNull()?.walSizeBytes,
+            shmSize = sorted.firstOrNull()?.shmSizeBytes,
+            lastMaintenanceTime = System.currentTimeMillis(),
             history = sorted
         )
 
         saveMetadata(metadata)
-        Log.d(TAG, "Rebuilt metadata with ${sorted.size} entries")
+        Log.d(TAG, "Rebuilt metadata with ${sorted.size} entries " +
+                "(auto=${sorted.count { it.type == "auto" }}, " +
+                "manual=${sorted.count { it.type == "manual" }}, " +
+                "emergency=${sorted.count { it.type == "emergency" }}, " +
+                "storage=${totalStorage} bytes, " +
+                "healthy=${sorted.count { !it.isCorrupted }}, " +
+                "corrupted=${sorted.count { it.isCorrupted }})")
         return metadata
     }
 
