@@ -68,10 +68,9 @@ import com.example.expensetracker.backup.BackupLifecycleManager
 import kotlin.concurrent.thread
 
 class MainActivity : ComponentActivity() {
-    
-    // Constant for the backend URL
-    // Use "http://10.0.2.2:8080" for Android Emulator to host PC
-    private val APP_URL = "file:///android_asset/index.html"
+
+    // URL for the bundled offline WebView app
+    private val appUrl = "file:///android_asset/index.html"
     private lateinit var googleAuthManager: GoogleAuthManager
     private lateinit var themeManager: ThemeManager
 
@@ -177,7 +176,7 @@ class MainActivity : ComponentActivity() {
                                     }
 
                                     ExpenseTrackerWebView(
-                                        url = APP_URL,
+                                        url = appUrl,
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .padding(innerPadding),
@@ -241,7 +240,8 @@ fun ExpenseTrackerWebView(
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var uploadMessage by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
 
-    // Register receiver to log download completion
+    // Register receiver to log download completion.
+    // On API 33+ the flag is required; on older APIs the flag overload is unavailable.
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -252,23 +252,17 @@ fun ExpenseTrackerWebView(
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED)
+            context.registerReceiver(
+                receiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                Context.RECEIVER_NOT_EXPORTED
+            )
         } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-
-                context.registerReceiver(
-                    receiver,
-                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                    Context.RECEIVER_NOT_EXPORTED
-                )
-
-            } else {
-
-                context.registerReceiver(
-                    receiver,
-                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-                )
-            }
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(
+                receiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+            )
         }
         onDispose {
             context.unregisterReceiver(receiver)
@@ -305,7 +299,11 @@ fun ExpenseTrackerWebView(
                     settings.useWideViewPort = true
                     settings.allowFileAccess = true
                     settings.allowContentAccess = true
+                    // Required for local file:// asset cross-origin access within the bundled app.
+                    // These are deprecated in API 31 but remain necessary for file:// WebView assets.
+                    @Suppress("DEPRECATION")
                     settings.allowFileAccessFromFileURLs = true
+                    @Suppress("DEPRECATION")
                     settings.allowUniversalAccessFromFileURLs = true
 
                     val database = ExpenseDatabase.getInstance(context)
@@ -372,7 +370,7 @@ fun ExpenseTrackerWebView(
                             if (intent != null) {
                                 try {
                                     fileChooserLauncher.launch(intent)
-                                } catch (e: Exception) {
+                                } catch (_: Exception) {
                                     uploadMessage = null
                                     return false
                                 }
@@ -384,7 +382,7 @@ fun ExpenseTrackerWebView(
                         }
                     }
 
-                    setDownloadListener { downloadUrl, userAgent, contentDisposition, mimetype, contentLength ->
+                    setDownloadListener { downloadUrl, userAgent, contentDisposition, mimetype, _ ->
                         Log.d("ExpenseTracker", "WebView download requested: $downloadUrl")
                         val request = DownloadManager.Request(Uri.parse(downloadUrl)).apply {
                             setMimeType(mimetype)
