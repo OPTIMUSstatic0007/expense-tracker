@@ -27,6 +27,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
@@ -92,7 +93,9 @@ class MainActivity : ComponentActivity() {
         themeManager = ThemeManager(this)
         cloudFirestoreRepository = CloudFirestoreRepository()
         connectivityMonitor = ConnectivityMonitor(this)
-        syncManager = SyncManager(cloudFirestoreRepository, connectivityMonitor)
+        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            ?: "unknown-device"
+        syncManager = SyncManager(cloudFirestoreRepository, connectivityMonitor, deviceId)
 
         val googleSignInLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
@@ -200,6 +203,7 @@ class MainActivity : ComponentActivity() {
                                             .padding(innerPadding),
                                         themeManager = themeManager,
                                         isDark = isDark,
+                                        syncManager = syncManager,
                                         onOpenSettings = {
                                             // AndroidBridge calls from a background thread,
                                             // must switch to main thread for Compose state update
@@ -255,6 +259,7 @@ fun ExpenseTrackerWebView(
     modifier: Modifier = Modifier,
     themeManager: ThemeManager? = null,
     isDark: Boolean = false,
+    syncManager: SyncManager? = null,
     onOpenSettings: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -330,7 +335,7 @@ fun ExpenseTrackerWebView(
                     settings.allowUniversalAccessFromFileURLs = true
 
                     val database = ExpenseDatabase.getInstance(context)
-                    val repository = LocalRepository(context)
+                    val repository = LocalRepository(context, syncManager)
                     val backupManager = BackupManager(context, database)
                     val lifecycleManager = BackupLifecycleManager(context, backupManager)
                     val restoreManager = RestoreManager(context, database, backupManager, lifecycleManager)

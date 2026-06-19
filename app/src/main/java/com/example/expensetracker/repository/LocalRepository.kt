@@ -1,19 +1,29 @@
 package com.example.expensetracker.repository
 
 import android.content.Context
+import androidx.room.withTransaction
+import com.example.expensetracker.cloud.PendingOperation
+import com.example.expensetracker.cloud.SyncManager
 import com.example.expensetracker.local.ExpenseDatabase
 import com.example.expensetracker.local.TransactionDao
 import com.example.expensetracker.local.TransactionEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 
-class LocalRepository(private val context: Context) {
+class LocalRepository(
+    private val context: Context,
+    private val syncManager: SyncManager? = null
+) {
+    private val database: ExpenseDatabase
+        get() = ExpenseDatabase.getInstance(context)
 
     private val transactionDao: TransactionDao
-        get() = ExpenseDatabase.getInstance(context).transactionDao()
+        get() = database.transactionDao()
 
     suspend fun insertTransaction(transaction: TransactionEntity) {
-        kotlinx.coroutines.Dispatchers.IO.let {
-            kotlinx.coroutines.withContext(it) {
+        val insertedEntity = withContext(Dispatchers.IO) {
+            database.withTransaction {
                 val entityToInsert = if (transaction.sequenceId == 0L) {
                     val maxSeq = transactionDao.getMaxSequenceId() ?: 0L
                     transaction.copy(sequenceId = maxSeq + 1L)
@@ -21,23 +31,31 @@ class LocalRepository(private val context: Context) {
                     transaction
                 }
                 transactionDao.insertTransaction(entityToInsert)
+                entityToInsert
             }
         }
+        syncManager?.onTransactionChanged(insertedEntity, PendingOperation.OperationType.CREATE)
     }
 
     suspend fun updateTransaction(transaction: TransactionEntity) {
-        kotlinx.coroutines.Dispatchers.IO.let {
-            kotlinx.coroutines.withContext(it) {
+        val updatedEntity = withContext(Dispatchers.IO) {
+            database.withTransaction {
                 transactionDao.updateTransaction(transaction)
+                transaction
             }
         }
+        syncManager?.onTransactionChanged(updatedEntity, PendingOperation.OperationType.UPDATE)
     }
 
     suspend fun softDeleteTransaction(id: String) {
-        kotlinx.coroutines.Dispatchers.IO.let {
-            kotlinx.coroutines.withContext(it) {
+        val deletedEntity = withContext(Dispatchers.IO) {
+            database.withTransaction {
                 transactionDao.softDeleteTransaction(id = id, deleted = true, updatedAt = System.currentTimeMillis())
+                transactionDao.getTransactionById(id)
             }
+        }
+        if (deletedEntity != null) {
+            syncManager?.onTransactionChanged(deletedEntity, PendingOperation.OperationType.DELETE)
         }
     }
 

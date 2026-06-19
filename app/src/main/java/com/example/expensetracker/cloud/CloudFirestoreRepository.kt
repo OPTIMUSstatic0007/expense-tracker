@@ -1,12 +1,16 @@
 package com.example.expensetracker.cloud
 
 import com.example.expensetracker.firebase.FirestoreConstants
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 
-class CloudFirestoreRepository {
+class CloudFirestoreRepository(
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+) {
     private var firestore: FirebaseFirestore? = null
     private var authenticatedUser: FirebaseUser? = null
 
@@ -76,16 +80,25 @@ class CloudFirestoreRepository {
             .document(FirestoreConstants.DOC_SYNC)
     }
 
-    fun createTransaction(@Suppress("UNUSED_PARAMETER") transaction: CloudTransaction): Nothing {
-        throw NotImplementedError("Transaction uploads are intentionally out of scope for Sprint 1")
+    suspend fun createTransaction(transaction: CloudTransaction) {
+        val user = requireUploadUser(transaction.ownerUid)
+        transactionDocument(transaction.id)
+            .set(transaction.toFirestoreMap(ownerUid = user.uid, deleted = false))
+            .await()
     }
 
-    fun updateTransaction(@Suppress("UNUSED_PARAMETER") transaction: CloudTransaction): Nothing {
-        throw NotImplementedError("Transaction updates are intentionally out of scope for Sprint 1")
+    suspend fun updateTransaction(transaction: CloudTransaction) {
+        val user = requireUploadUser(transaction.ownerUid)
+        transactionDocument(transaction.id)
+            .update(transaction.toFirestoreMap(ownerUid = user.uid, deleted = false))
+            .await()
     }
 
-    fun deleteTransaction(@Suppress("UNUSED_PARAMETER") transactionId: String): Nothing {
-        throw NotImplementedError("Transaction deletes are intentionally out of scope for Sprint 1")
+    suspend fun softDeleteTransaction(transaction: CloudTransaction) {
+        val user = requireUploadUser(transaction.ownerUid)
+        transactionDocument(transaction.id)
+            .set(transaction.toFirestoreMap(ownerUid = user.uid, deleted = true))
+            .await()
     }
 
     private fun requireFirestore(): FirebaseFirestore {
@@ -94,5 +107,55 @@ class CloudFirestoreRepository {
 
     private fun requireAuthenticatedUser(): FirebaseUser {
         return authenticatedUser ?: error("CloudFirestoreRepository requires an authenticated user")
+    }
+
+    private fun requireUploadUser(ownerUid: String): FirebaseUser {
+        val currentUser = auth.currentUser
+            ?: run {
+                SyncLogger.warning("Authentication missing: Firebase user is required before upload")
+                error("Authenticated Firebase user is required before upload")
+            }
+
+        if (currentUser.isAnonymous) {
+            SyncLogger.warning("Authentication missing: anonymous Firebase user cannot upload")
+            error("Anonymous Firebase users cannot upload transactions")
+        }
+
+        if (currentUser.uid.isBlank()) {
+            SyncLogger.warning("Authentication missing: Firebase uid is blank")
+            error("Authenticated Firebase uid must not be blank")
+        }
+
+        if (authenticatedUser?.uid != currentUser.uid) {
+            SyncLogger.warning("Authentication missing: initialized user does not match current Firebase user")
+            error("CloudFirestoreRepository user does not match current Firebase user")
+        }
+
+        if (ownerUid != currentUser.uid) {
+            SyncLogger.warning("Authentication missing: ownerUid does not match authenticated Firebase user")
+            error("Cloud transaction ownerUid must match authenticated Firebase user")
+        }
+
+        return currentUser
+    }
+
+    private fun CloudTransaction.toFirestoreMap(
+        ownerUid: String,
+        deleted: Boolean
+    ): Map<String, Any> {
+        return mapOf(
+            FirestoreConstants.FIELD_ID to id,
+            FirestoreConstants.FIELD_OWNER_UID to ownerUid,
+            FirestoreConstants.FIELD_DEVICE_ID to deviceId,
+            FirestoreConstants.FIELD_CREATED_AT to createdAt,
+            FirestoreConstants.FIELD_UPDATED_AT to updatedAt,
+            FirestoreConstants.FIELD_VERSION to version,
+            FirestoreConstants.FIELD_SYNC_STATUS to syncStatus,
+            FirestoreConstants.FIELD_AMOUNT to amount,
+            FirestoreConstants.FIELD_TYPE to type,
+            FirestoreConstants.FIELD_CATEGORY to category,
+            FirestoreConstants.FIELD_NOTE to note,
+            FirestoreConstants.FIELD_DELETED to deleted
+        )
     }
 }

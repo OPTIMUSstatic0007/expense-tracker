@@ -11,7 +11,7 @@ data class PendingOperation(
     val transactionId: String = "",
     val operationType: OperationType = OperationType.CREATE,
     val attemptedAt: Long = 0L,
-    val attemptCount: Int = 0
+    val retryCount: Int = 0
 ) {
     enum class OperationType {
         CREATE,
