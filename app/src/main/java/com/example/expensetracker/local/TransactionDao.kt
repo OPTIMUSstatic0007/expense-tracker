@@ -12,6 +12,9 @@ interface TransactionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertTransaction(transaction: TransactionEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    fun insertTransactionsIgnoringDuplicates(transactions: List<TransactionEntity>): List<Long>
+
     @Update
     fun updateTransaction(transaction: TransactionEntity)
 
@@ -29,4 +32,7 @@ interface TransactionDao {
 
     @Query("SELECT MAX(sequenceId) FROM transactions")
     fun getMaxSequenceId(): Long?
+
+    @Query("SELECT COUNT(*) FROM transactions")
+    fun getTransactionCount(): Int
 }

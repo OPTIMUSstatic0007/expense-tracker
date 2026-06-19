@@ -3,6 +3,7 @@ package com.example.expensetracker.cloud
 import com.google.firebase.auth.FirebaseUser
 import com.example.expensetracker.firebase.FirestoreConstants
 import com.example.expensetracker.local.TransactionEntity
+import com.example.expensetracker.repository.LocalRepository
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,8 +31,10 @@ class SyncManager(
     private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val queueMutex = Mutex()
     private val uploadMutex = Mutex()
+    private val downloadMutex = Mutex()
     private val pendingUploads = mutableListOf<PendingUpload>()
     private var connectivityJob: Job? = null
+    private var localRepository: LocalRepository? = null
 
     fun initialize(user: FirebaseUser) {
         if (initializedUid == user.uid) {
@@ -52,6 +55,7 @@ class SyncManager(
         connectivityMonitor.start()
         observeConnectivity()
         requestUploadDrain()
+        requestDownload()
         SyncLogger.info("SyncManager initialized for uid=${user.uid}")
     }
 
@@ -78,7 +82,14 @@ class SyncManager(
                 pendingUploads.clear()
             }
         }
+        localRepository = null
         SyncLogger.info("SyncManager reset after sign out")
+    }
+
+    fun attachLocalRepository(repository: LocalRepository) {
+        localRepository = repository
+        SyncLogger.info("SyncManager local repository attached")
+        requestDownload()
     }
 
     suspend fun onTransactionChanged(
@@ -116,6 +127,7 @@ class SyncManager(
             connectivityMonitor.connectivityState.collectLatest { state ->
                 if (state is ConnectivityState.Online) {
                     requestUploadDrain()
+                    requestDownload()
                 }
             }
         }
@@ -124,6 +136,59 @@ class SyncManager(
     private fun requestUploadDrain() {
         managerScope.launch {
             drainPendingUploads()
+        }
+    }
+
+    fun downloadFromCloud() {
+        requestDownload()
+    }
+
+    private fun requestDownload() {
+        managerScope.launch {
+            downloadMissingTransactions()
+        }
+    }
+
+    private suspend fun downloadMissingTransactions() {
+        downloadMutex.withLock {
+            val uid = initializedUid
+            if (uid.isNullOrBlank()) {
+                SyncLogger.warning("Download skipped: authenticated user missing")
+                _syncState.value = SyncState.Disabled("Awaiting authentication")
+                return
+            }
+
+            if (!cloudFirestoreRepository.isInitialized) {
+                SyncLogger.warning("Download skipped: Cloud Firestore unavailable")
+                _syncState.value = SyncState.Disabled("Cloud Firestore unavailable")
+                return
+            }
+
+            if (connectivityMonitor.connectivityState.value is ConnectivityState.Offline) {
+                SyncLogger.info("Download skipped because offline")
+                return
+            }
+
+            val repository = localRepository
+            if (repository == null) {
+                SyncLogger.info("Download deferred: local repository unavailable")
+                return
+            }
+
+            try {
+                _syncState.value = SyncState.Syncing
+                val localCount = repository.getTransactionCount()
+                val cloudTransactions = cloudFirestoreRepository.downloadTransactions()
+                val entities = cloudTransactions.map(CloudTransactionMapper::toEntity)
+                val insertedCount = repository.insertMissingTransactionsFromCloud(entities)
+                SyncLogger.info(
+                    "Download complete: localCount=$localCount cloudCount=${cloudTransactions.size} insertedCount=$insertedCount"
+                )
+                _syncState.value = SyncState.Idle
+            } catch (exception: Exception) {
+                _syncState.value = SyncState.Error("Download failed")
+                SyncLogger.error("Download failed", exception)
+            }
         }
     }
 

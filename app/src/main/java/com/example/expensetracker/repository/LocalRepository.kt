@@ -59,6 +59,33 @@ class LocalRepository(
         }
     }
 
+    suspend fun insertMissingTransactionsFromCloud(transactions: List<TransactionEntity>): Int {
+        if (transactions.isEmpty()) {
+            return 0
+        }
+
+        return withContext(Dispatchers.IO) {
+            database.withTransaction {
+                var nextSequenceId = (transactionDao.getMaxSequenceId() ?: 0L) + 1L
+                val entitiesToInsert = transactions.map { transaction ->
+                    if (transaction.sequenceId == 0L) {
+                        transaction.copy(sequenceId = nextSequenceId++)
+                    } else {
+                        transaction
+                    }
+                }
+                transactionDao.insertTransactionsIgnoringDuplicates(entitiesToInsert)
+                    .count { rowId -> rowId != -1L }
+            }
+        }
+    }
+
+    suspend fun getTransactionCount(): Int {
+        return withContext(Dispatchers.IO) {
+            transactionDao.getTransactionCount()
+        }
+    }
+
     fun getAllTransactions(): Flow<List<TransactionEntity>> {
         return transactionDao.getAllTransactions()
     }

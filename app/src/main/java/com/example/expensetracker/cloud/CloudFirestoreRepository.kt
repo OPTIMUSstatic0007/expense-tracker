@@ -4,6 +4,7 @@ import com.example.expensetracker.firebase.FirestoreConstants
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -101,6 +102,24 @@ class CloudFirestoreRepository(
             .await()
     }
 
+    suspend fun downloadTransactions(): List<CloudTransaction> {
+        val user = requireDownloadUser()
+        val snapshot = transactionsCollection()
+            .whereEqualTo(FirestoreConstants.FIELD_DELETED, false)
+            .get()
+            .await()
+
+        return snapshot.documents.mapNotNull { document ->
+            val transaction = document.toCloudTransaction()
+            if (transaction.ownerUid != user.uid) {
+                SyncLogger.warning("Download skipped owner mismatch for transactionId=${document.id}")
+                null
+            } else {
+                transaction
+            }
+        }
+    }
+
     private fun requireFirestore(): FirebaseFirestore {
         return firestore ?: error("CloudFirestoreRepository is not initialized")
     }
@@ -137,6 +156,48 @@ class CloudFirestoreRepository(
         }
 
         return currentUser
+    }
+
+    private fun requireDownloadUser(): FirebaseUser {
+        val currentUser = auth.currentUser
+            ?: run {
+                SyncLogger.warning("Authentication missing: Firebase user is required before download")
+                error("Authenticated Firebase user is required before download")
+            }
+
+        if (currentUser.isAnonymous) {
+            SyncLogger.warning("Authentication missing: anonymous Firebase user cannot download")
+            error("Anonymous Firebase users cannot download transactions")
+        }
+
+        if (currentUser.uid.isBlank()) {
+            SyncLogger.warning("Authentication missing: Firebase uid is blank")
+            error("Authenticated Firebase uid must not be blank")
+        }
+
+        if (authenticatedUser?.uid != currentUser.uid) {
+            SyncLogger.warning("Authentication missing: initialized user does not match current Firebase user")
+            error("CloudFirestoreRepository user does not match current Firebase user")
+        }
+
+        return currentUser
+    }
+
+    private fun DocumentSnapshot.toCloudTransaction(): CloudTransaction {
+        return CloudTransaction(
+            id = id,
+            ownerUid = getString(FirestoreConstants.FIELD_OWNER_UID).orEmpty(),
+            deviceId = getString(FirestoreConstants.FIELD_DEVICE_ID).orEmpty(),
+            createdAt = getLong(FirestoreConstants.FIELD_CREATED_AT) ?: 0L,
+            updatedAt = getLong(FirestoreConstants.FIELD_UPDATED_AT) ?: 0L,
+            version = getLong(FirestoreConstants.FIELD_VERSION) ?: 1L,
+            syncStatus = getString(FirestoreConstants.FIELD_SYNC_STATUS) ?: SyncStatus.SYNCED.name,
+            amount = getDouble(FirestoreConstants.FIELD_AMOUNT) ?: 0.0,
+            type = getString(FirestoreConstants.FIELD_TYPE).orEmpty(),
+            category = getString(FirestoreConstants.FIELD_CATEGORY).orEmpty(),
+            note = getString(FirestoreConstants.FIELD_NOTE).orEmpty(),
+            deleted = getBoolean(FirestoreConstants.FIELD_DELETED) ?: false
+        )
     }
 
     private fun CloudTransaction.toFirestoreMap(

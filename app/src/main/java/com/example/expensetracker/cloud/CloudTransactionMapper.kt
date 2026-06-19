@@ -23,4 +23,18 @@ object CloudTransactionMapper {
             deleted = entity.deleted
         )
     }
+
+    fun toEntity(transaction: CloudTransaction): TransactionEntity {
+        return TransactionEntity(
+            id = transaction.id,
+            amount = transaction.amount,
+            type = transaction.type,
+            category = transaction.category,
+            note = transaction.note,
+            createdAt = transaction.createdAt,
+            updatedAt = transaction.updatedAt,
+            deleted = transaction.deleted,
+            syncPending = false
+        )
+    }
 }

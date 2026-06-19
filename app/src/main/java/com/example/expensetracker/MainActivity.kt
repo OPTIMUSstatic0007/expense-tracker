@@ -336,6 +336,7 @@ fun ExpenseTrackerWebView(
 
                     val database = ExpenseDatabase.getInstance(context)
                     val repository = LocalRepository(context, syncManager)
+                    syncManager?.attachLocalRepository(repository)
                     val backupManager = BackupManager(context, database)
                     val lifecycleManager = BackupLifecycleManager(context, backupManager)
                     val restoreManager = RestoreManager(context, database, backupManager, lifecycleManager)
