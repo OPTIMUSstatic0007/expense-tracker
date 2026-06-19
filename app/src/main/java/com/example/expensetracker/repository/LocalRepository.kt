@@ -80,6 +80,51 @@ class LocalRepository(
         }
     }
 
+    suspend fun insertTransactionFromCloud(transaction: TransactionEntity): Boolean {
+        return withContext(Dispatchers.IO) {
+            database.withTransaction {
+                val entityToInsert = if (transaction.sequenceId == 0L) {
+                    val maxSeq = transactionDao.getMaxSequenceId() ?: 0L
+                    transaction.copy(sequenceId = maxSeq + 1L, syncPending = false)
+                } else {
+                    transaction.copy(syncPending = false)
+                }
+                transactionDao.insertTransactionsIgnoringDuplicates(listOf(entityToInsert))
+                    .firstOrNull() != -1L
+            }
+        }
+    }
+
+    suspend fun updateTransactionFromCloud(transaction: TransactionEntity) {
+        withContext(Dispatchers.IO) {
+            database.withTransaction {
+                val existing = transactionDao.getTransactionById(transaction.id) ?: return@withTransaction
+                transactionDao.updateTransaction(
+                    transaction.copy(
+                        sequenceId = existing.sequenceId,
+                        syncPending = false
+                    )
+                )
+            }
+        }
+    }
+
+    suspend fun softDeleteTransactionFromCloud(id: String, updatedAt: Long) {
+        withContext(Dispatchers.IO) {
+            transactionDao.softDeleteTransactionFromCloud(
+                id = id,
+                deleted = true,
+                updatedAt = updatedAt
+            )
+        }
+    }
+
+    suspend fun getTransactionById(id: String): TransactionEntity? {
+        return withContext(Dispatchers.IO) {
+            transactionDao.getTransactionById(id)
+        }
+    }
+
     suspend fun getTransactionCount(): Int {
         return withContext(Dispatchers.IO) {
             transactionDao.getTransactionCount()

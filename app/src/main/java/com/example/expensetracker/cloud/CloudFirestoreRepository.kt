@@ -4,9 +4,11 @@ import com.example.expensetracker.firebase.FirestoreConstants
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.tasks.await
 
 class CloudFirestoreRepository(
@@ -118,6 +120,29 @@ class CloudFirestoreRepository(
                 transaction
             }
         }
+    }
+
+    fun listenToTransactionChanges(
+        onDocumentChange: (DocumentChange.Type, CloudTransaction) -> Unit,
+        onError: (Exception) -> Unit
+    ): ListenerRegistration {
+        val user = requireDownloadUser()
+        return transactionsCollection()
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    onError(exception)
+                    return@addSnapshotListener
+                }
+
+                snapshot?.documentChanges.orEmpty().forEach { change ->
+                    val transaction = change.document.toCloudTransaction()
+                    if (transaction.ownerUid != user.uid) {
+                        SyncLogger.warning("Realtime skipped owner mismatch for transactionId=${change.document.id}")
+                    } else {
+                        onDocumentChange(change.type, transaction)
+                    }
+                }
+            }
     }
 
     private fun requireFirestore(): FirebaseFirestore {

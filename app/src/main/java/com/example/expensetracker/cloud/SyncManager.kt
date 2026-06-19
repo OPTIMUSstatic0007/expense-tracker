@@ -4,6 +4,8 @@ import com.google.firebase.auth.FirebaseUser
 import com.example.expensetracker.firebase.FirestoreConstants
 import com.example.expensetracker.local.TransactionEntity
 import com.example.expensetracker.repository.LocalRepository
+import com.google.firebase.firestore.DocumentChange
+import com.google.firebase.firestore.ListenerRegistration
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,18 +30,28 @@ class SyncManager(
     val connectivityState: StateFlow<ConnectivityState> = connectivityMonitor.connectivityState
 
     private var initializedUid: String? = null
-    private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val managerJob = SupervisorJob()
+    private val managerScope = CoroutineScope(managerJob + Dispatchers.IO)
     private val queueMutex = Mutex()
     private val uploadMutex = Mutex()
     private val downloadMutex = Mutex()
+    private val realtimeMutex = Mutex()
     private val pendingUploads = mutableListOf<PendingUpload>()
+    private val pendingRealtimeChanges = mutableListOf<PendingRealtimeChange>()
     private var connectivityJob: Job? = null
     private var localRepository: LocalRepository? = null
+    private var realtimeListenerRegistration: ListenerRegistration? = null
+    private var realtimeListenerUid: String? = null
 
     fun initialize(user: FirebaseUser) {
         if (initializedUid == user.uid) {
             SyncLogger.info("SyncManager already initialized for uid=${user.uid}")
+            attachRealtimeListener()
             return
+        }
+
+        if (initializedUid != null) {
+            detachRealtimeListener()
         }
 
         SyncLogger.info("SyncManager initialization requested for uid=${user.uid}")
@@ -54,6 +66,7 @@ class SyncManager(
         initializedUid = user.uid
         connectivityMonitor.start()
         observeConnectivity()
+        attachRealtimeListener()
         requestUploadDrain()
         requestDownload()
         SyncLogger.info("SyncManager initialized for uid=${user.uid}")
@@ -68,11 +81,21 @@ class SyncManager(
         SyncLogger.info("SyncManager onStop")
     }
 
+    fun shutdown() {
+        detachRealtimeListener()
+        connectivityJob?.cancel()
+        connectivityJob = null
+        connectivityMonitor.stop()
+        managerJob.cancel()
+        SyncLogger.info("SyncManager shutdown")
+    }
+
     fun onUserAuthenticated(user: FirebaseUser) {
         initialize(user)
     }
 
     fun onUserSignedOut() {
+        detachRealtimeListener()
         initializedUid = null
         cloudFirestoreRepository.clear()
         connectivityMonitor.stop()
@@ -80,6 +103,9 @@ class SyncManager(
         managerScope.launch {
             queueMutex.withLock {
                 pendingUploads.clear()
+            }
+            realtimeMutex.withLock {
+                pendingRealtimeChanges.clear()
             }
         }
         localRepository = null
@@ -89,6 +115,8 @@ class SyncManager(
     fun attachLocalRepository(repository: LocalRepository) {
         localRepository = repository
         SyncLogger.info("SyncManager local repository attached")
+        attachRealtimeListener()
+        requestRealtimeDrain()
         requestDownload()
     }
 
@@ -147,6 +175,178 @@ class SyncManager(
         managerScope.launch {
             downloadMissingTransactions()
         }
+    }
+
+    private fun requestRealtimeDrain() {
+        managerScope.launch {
+            drainPendingRealtimeChanges()
+        }
+    }
+
+    private fun attachRealtimeListener() {
+        val uid = initializedUid
+        if (uid.isNullOrBlank()) {
+            SyncLogger.warning("Realtime listener skipped: authenticated user missing")
+            return
+        }
+
+        if (!cloudFirestoreRepository.isInitialized) {
+            SyncLogger.warning("Realtime listener skipped: Cloud Firestore unavailable")
+            return
+        }
+
+        if (realtimeListenerRegistration != null && realtimeListenerUid == uid) {
+            return
+        }
+
+        detachRealtimeListener()
+
+        try {
+            realtimeListenerRegistration = cloudFirestoreRepository.listenToTransactionChanges(
+                onDocumentChange = { changeType, transaction ->
+                    managerScope.launch {
+                        applyRealtimeChange(changeType, transaction)
+                    }
+                },
+                onError = { exception ->
+                    _syncState.value = SyncState.Error("Realtime listener failed")
+                    SyncLogger.error("Realtime listener failed", exception)
+                }
+            )
+            realtimeListenerUid = uid
+            SyncLogger.info("Realtime listener attached")
+        } catch (exception: Exception) {
+            realtimeListenerRegistration = null
+            realtimeListenerUid = null
+            _syncState.value = SyncState.Error("Realtime listener failed")
+            SyncLogger.error("Realtime listener failed", exception)
+        }
+    }
+
+    private fun detachRealtimeListener() {
+        val registration = realtimeListenerRegistration ?: return
+        registration.remove()
+        realtimeListenerRegistration = null
+        realtimeListenerUid = null
+        SyncLogger.info("Realtime detached")
+    }
+
+    private suspend fun applyRealtimeChange(
+        changeType: DocumentChange.Type,
+        transaction: CloudTransaction
+    ) {
+        realtimeMutex.withLock {
+            val uid = initializedUid
+            if (uid.isNullOrBlank()) {
+                SyncLogger.warning("Realtime skipped: authenticated user missing")
+                return
+            }
+
+            if (transaction.ownerUid != uid) {
+                SyncLogger.warning("Realtime skipped owner mismatch for transactionId=${transaction.id}")
+                return
+            }
+
+            val repository = localRepository
+            if (repository == null) {
+                pendingRealtimeChanges.add(PendingRealtimeChange(changeType, transaction))
+                SyncLogger.info("Realtime deferred: local repository unavailable")
+                return
+            }
+
+            when (changeType) {
+                DocumentChange.Type.ADDED -> applyRealtimeAdded(repository, transaction)
+                DocumentChange.Type.MODIFIED -> applyRealtimeModified(repository, transaction)
+                DocumentChange.Type.REMOVED -> applyRealtimeRemoved(repository, transaction)
+            }
+        }
+    }
+
+    private suspend fun drainPendingRealtimeChanges() {
+        realtimeMutex.withLock {
+            val repository = localRepository ?: return
+            if (pendingRealtimeChanges.isEmpty()) {
+                return
+            }
+
+            val changes = pendingRealtimeChanges.toList()
+            pendingRealtimeChanges.clear()
+            changes.forEach { change ->
+                when (change.changeType) {
+                    DocumentChange.Type.ADDED -> applyRealtimeAdded(repository, change.transaction)
+                    DocumentChange.Type.MODIFIED -> applyRealtimeModified(repository, change.transaction)
+                    DocumentChange.Type.REMOVED -> applyRealtimeRemoved(repository, change.transaction)
+                }
+            }
+        }
+    }
+
+    private suspend fun applyRealtimeAdded(
+        repository: LocalRepository,
+        transaction: CloudTransaction
+    ) {
+        val existing = repository.getTransactionById(transaction.id)
+        if (existing != null) {
+            SyncLogger.info("Realtime ADDED ignored existing transactionId=${transaction.id}")
+            return
+        }
+
+        val inserted = repository.insertTransactionFromCloud(
+            CloudTransactionMapper.toEntity(transaction)
+        )
+        if (inserted) {
+            SyncLogger.info("Realtime ADDED transactionId=${transaction.id}")
+        }
+    }
+
+    private suspend fun applyRealtimeModified(
+        repository: LocalRepository,
+        transaction: CloudTransaction
+    ) {
+        val existing = repository.getTransactionById(transaction.id)
+        if (existing == null) {
+            SyncLogger.info("Realtime MODIFIED ignored missing transactionId=${transaction.id}")
+            return
+        }
+
+        if (isSelfEcho(transaction, existing)) {
+            SyncLogger.info("Realtime MODIFIED ignored self echo transactionId=${transaction.id}")
+            return
+        }
+
+        repository.updateTransactionFromCloud(CloudTransactionMapper.toEntity(transaction))
+        SyncLogger.info("Realtime MODIFIED transactionId=${transaction.id}")
+    }
+
+    private suspend fun applyRealtimeRemoved(
+        repository: LocalRepository,
+        transaction: CloudTransaction
+    ) {
+        val existing = repository.getTransactionById(transaction.id)
+        if (existing == null) {
+            SyncLogger.info("Realtime REMOVED ignored missing transactionId=${transaction.id}")
+            return
+        }
+
+        repository.softDeleteTransactionFromCloud(
+            id = transaction.id,
+            updatedAt = maxOf(transaction.updatedAt, existing.updatedAt)
+        )
+        SyncLogger.info("Realtime REMOVED transactionId=${transaction.id}")
+    }
+
+    private fun isSelfEcho(
+        transaction: CloudTransaction,
+        existing: TransactionEntity
+    ): Boolean {
+        return transaction.deviceId == deviceId &&
+                existing.amount == transaction.amount &&
+                existing.type == transaction.type &&
+                existing.category == transaction.category &&
+                existing.note == transaction.note &&
+                existing.createdAt == transaction.createdAt &&
+                existing.updatedAt == transaction.updatedAt &&
+                existing.deleted == transaction.deleted
     }
 
     private suspend fun downloadMissingTransactions() {
@@ -320,5 +520,10 @@ class SyncManager(
     private data class PendingUpload(
         val operation: PendingOperation,
         val transaction: TransactionEntity
+    )
+
+    private data class PendingRealtimeChange(
+        val changeType: DocumentChange.Type,
+        val transaction: CloudTransaction
     )
 }

@@ -247,7 +247,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        syncManager.onStop()
+        syncManager.shutdown()
         super.onDestroy()
     }
 }
