@@ -27,10 +27,10 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     fun getTransactionById(id: String): TransactionEntity?
 
-    @Query("SELECT * FROM transactions WHERE deleted = 0 ORDER BY createdAt DESC, updatedAt DESC")
+    @Query("SELECT * FROM transactions WHERE deleted = 0 ORDER BY sequenceId DESC, createdAt DESC, updatedAt DESC")
     fun getAllTransactions(): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE deleted = 0 AND createdAt >= :start AND createdAt <= :end ORDER BY createdAt DESC, updatedAt DESC")
+    @Query("SELECT * FROM transactions WHERE deleted = 0 AND createdAt >= :start AND createdAt <= :end ORDER BY sequenceId DESC, createdAt DESC, updatedAt DESC")
     fun getTransactionsByMonth(start: Long, end: Long): Flow<List<TransactionEntity>>
 
     @Query("SELECT MAX(sequenceId) FROM transactions")

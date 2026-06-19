@@ -67,13 +67,15 @@ class LocalRepository(
         return withContext(Dispatchers.IO) {
             database.withTransaction {
                 var nextSequenceId = (transactionDao.getMaxSequenceId() ?: 0L) + 1L
-                val entitiesToInsert = transactions.map { transaction ->
-                    if (transaction.sequenceId == 0L) {
-                        transaction.copy(sequenceId = nextSequenceId++)
-                    } else {
-                        transaction
+                val entitiesToInsert = transactions
+                    .sortedWith(compareBy<TransactionEntity> { it.createdAt }.thenBy { it.updatedAt })
+                    .map { transaction ->
+                        if (transaction.sequenceId == 0L) {
+                            transaction.copy(sequenceId = nextSequenceId++)
+                        } else {
+                            transaction
+                        }
                     }
-                }
                 transactionDao.insertTransactionsIgnoringDuplicates(entitiesToInsert)
                     .count { rowId -> rowId != -1L }
             }

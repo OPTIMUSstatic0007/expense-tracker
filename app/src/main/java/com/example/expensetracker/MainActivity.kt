@@ -70,6 +70,7 @@ import com.example.expensetracker.repository.LocalRepository
 import com.example.expensetracker.bridge.AndroidBridge
 import com.example.expensetracker.backup.BackupLifecycleManager
 import kotlin.concurrent.thread
+import kotlinx.coroutines.flow.collectLatest
 
 class MainActivity : ComponentActivity() {
 
@@ -263,6 +264,9 @@ fun ExpenseTrackerWebView(
     onOpenSettings: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val repository = remember(context, syncManager) {
+        LocalRepository(context, syncManager)
+    }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
@@ -335,7 +339,6 @@ fun ExpenseTrackerWebView(
                     settings.allowUniversalAccessFromFileURLs = true
 
                     val database = ExpenseDatabase.getInstance(context)
-                    val repository = LocalRepository(context, syncManager)
                     syncManager?.attachLocalRepository(repository)
                     val backupManager = BackupManager(context, database)
                     val lifecycleManager = BackupLifecycleManager(context, backupManager)
@@ -446,6 +449,15 @@ fun ExpenseTrackerWebView(
                 "if(typeof applyTheme==='function'){applyTheme('$themeName');}",
                 null
             )
+        }
+
+        LaunchedEffect(repository, webViewInstance) {
+            repository.getAllTransactions().collectLatest {
+                webViewInstance?.evaluateJavascript(
+                    "if(typeof loadTransactions==='function'){currentPage=1;loadTransactions(false);}",
+                    null
+                )
+            }
         }
 
         if (isLoading) {
