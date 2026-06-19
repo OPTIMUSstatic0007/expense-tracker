@@ -6,6 +6,9 @@ import com.example.expensetracker.auth.GoogleAuthManager
 import com.example.expensetracker.auth.AuthState
 import com.example.expensetracker.backup.BackupManager
 import com.example.expensetracker.backup.RestoreManager
+import com.example.expensetracker.cloud.CloudFirestoreRepository
+import com.example.expensetracker.cloud.ConnectivityMonitor
+import com.example.expensetracker.cloud.SyncManager
 import com.example.expensetracker.ui.screens.LoginScreen
 import com.example.expensetracker.ui.screens.SettingsScreen
 import com.example.expensetracker.ui.navigation.Screen
@@ -73,6 +76,9 @@ class MainActivity : ComponentActivity() {
     private val appUrl = "file:///android_asset/index.html"
     private lateinit var googleAuthManager: GoogleAuthManager
     private lateinit var themeManager: ThemeManager
+    private lateinit var cloudFirestoreRepository: CloudFirestoreRepository
+    private lateinit var connectivityMonitor: ConnectivityMonitor
+    private lateinit var syncManager: SyncManager
 
     // Navigation state — which screen to show when authenticated
     private val currentScreen = mutableStateOf(Screen.Dashboard)
@@ -84,6 +90,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         googleAuthManager = GoogleAuthManager(this)
         themeManager = ThemeManager(this)
+        cloudFirestoreRepository = CloudFirestoreRepository()
+        connectivityMonitor = ConnectivityMonitor(this)
+        syncManager = SyncManager(cloudFirestoreRepository, connectivityMonitor)
 
         val googleSignInLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
@@ -126,10 +135,19 @@ class MainActivity : ComponentActivity() {
 
                 // Reset signing-in state when auth state changes to Authenticated
                 LaunchedEffect(authState) {
-                    if (authState is AuthState.Authenticated) {
-                        isSigningIn = false
-                        signInError = null
-                        currentScreen.value = Screen.Dashboard
+                    when (val state = authState) {
+                        is AuthState.Authenticated -> {
+                            isSigningIn = false
+                            signInError = null
+                            currentScreen.value = Screen.Dashboard
+                            syncManager.onUserAuthenticated(state.user)
+                        }
+
+                        is AuthState.Unauthenticated -> {
+                            syncManager.onUserSignedOut()
+                        }
+
+                        is AuthState.Loading -> Unit
                     }
                 }
 
@@ -222,6 +240,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        syncManager.onStop()
+        super.onDestroy()
     }
 }
 
