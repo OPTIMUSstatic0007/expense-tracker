@@ -20,7 +20,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class SyncManager(
+import android.content.Context
+import android.provider.Settings
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.expensetracker.worker.SyncWorker
+import java.util.concurrent.TimeUnit
+
+class SyncManager private constructor(
     private val cloudFirestoreRepository: CloudFirestoreRepository,
     private val connectivityMonitor: ConnectivityMonitor,
     private val pendingSyncRepository: PendingSyncRepository,
@@ -41,6 +54,11 @@ class SyncManager(
     private var localRepository: LocalRepository? = null
     private var realtimeListenerRegistration: ListenerRegistration? = null
     private var realtimeListenerUid: String? = null
+    private var context: Context? = null
+
+    fun setContext(appContext: Context) {
+        this.context = appContext.applicationContext
+    }
 
     fun initialize(user: FirebaseUser) {
         if (initializedUid == user.uid) {
@@ -69,6 +87,7 @@ class SyncManager(
         requestQueueRestore()
         requestUploadDrain()
         requestDownload()
+        schedulePeriodicBackgroundSync()
         SyncLogger.info("SyncManager initialized for uid=${user.uid}")
     }
 
@@ -79,6 +98,52 @@ class SyncManager(
     fun onStop() {
         connectivityMonitor.stop()
         SyncLogger.info("SyncManager onStop")
+    }
+
+    private fun schedulePeriodicBackgroundSync() {
+        val appContext = context ?: return
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val periodicWorkRequest = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                WorkManager.MIN_BACKOFF_MILLIS,
+                TimeUnit.MILLISECONDS
+            )
+            .build()
+
+        WorkManager.getInstance(appContext).enqueueUniquePeriodicWork(
+            "ExpenseTrackerPeriodicSync",
+            ExistingPeriodicWorkPolicy.KEEP,
+            periodicWorkRequest
+        )
+        SyncLogger.info("Periodic background sync scheduled")
+    }
+
+    private fun triggerOneTimeBackgroundSync() {
+        val appContext = context ?: return
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val oneTimeWorkRequest = OneTimeWorkRequestBuilder<SyncWorker>()
+            .setConstraints(constraints)
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                WorkManager.MIN_BACKOFF_MILLIS,
+                TimeUnit.MILLISECONDS
+            )
+            .build()
+
+        WorkManager.getInstance(appContext).enqueueUniqueWork(
+            "ExpenseTrackerOneTimeSync",
+            ExistingWorkPolicy.KEEP,
+            oneTimeWorkRequest
+        )
+        SyncLogger.info("One-time background sync scheduled")
     }
 
     fun shutdown() {
@@ -145,6 +210,7 @@ class SyncManager(
 
         pendingSyncRepository.insert(pendingOperation)
         requestUploadDrain()
+        triggerOneTimeBackgroundSync()
     }
 
     private fun observeConnectivity() {
@@ -158,6 +224,7 @@ class SyncManager(
                     logQueueResume()
                     requestUploadDrain()
                     requestDownload()
+                    triggerOneTimeBackgroundSync()
                 }
             }
         }
@@ -186,6 +253,19 @@ class SyncManager(
     private fun requestUploadDrain() {
         managerScope.launch {
             drainPendingUploads()
+        }
+    }
+
+    suspend fun performBackgroundSync(): Boolean {
+        return try {
+            SyncLogger.info("Background sync started")
+            drainPendingUploads()
+            downloadMissingTransactions()
+            SyncLogger.info("Background sync finished successfully")
+            true
+        } catch (exception: Exception) {
+            SyncLogger.error("Background sync failed", exception)
+            false
         }
     }
 
@@ -628,4 +708,28 @@ class SyncManager(
         val changeType: DocumentChange.Type,
         val transaction: CloudTransaction
     )
+
+    companion object {
+        @Volatile
+        private var instance: SyncManager? = null
+
+        fun getInstance(context: Context): SyncManager {
+            return instance ?: synchronized(this) {
+                instance ?: buildSyncManager(context.applicationContext).also { instance = it }
+            }
+        }
+
+        private fun buildSyncManager(context: Context): SyncManager {
+            val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+                ?: "unknown-device"
+            return SyncManager(
+                cloudFirestoreRepository = CloudFirestoreRepository(),
+                connectivityMonitor = ConnectivityMonitor(context),
+                pendingSyncRepository = PendingSyncRepository(context),
+                deviceId = deviceId
+            ).apply {
+                setContext(context)
+            }
+        }
+    }
 }

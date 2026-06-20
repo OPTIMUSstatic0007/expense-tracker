@@ -79,9 +79,6 @@ class MainActivity : ComponentActivity() {
     private val appUrl = "file:///android_asset/index.html"
     private lateinit var googleAuthManager: GoogleAuthManager
     private lateinit var themeManager: ThemeManager
-    private lateinit var cloudFirestoreRepository: CloudFirestoreRepository
-    private lateinit var connectivityMonitor: ConnectivityMonitor
-    private lateinit var pendingSyncRepository: PendingSyncRepository
     private lateinit var syncManager: SyncManager
 
     // Navigation state — which screen to show when authenticated
@@ -94,12 +91,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         googleAuthManager = GoogleAuthManager(this)
         themeManager = ThemeManager(this)
-        cloudFirestoreRepository = CloudFirestoreRepository()
-        connectivityMonitor = ConnectivityMonitor(this)
-        pendingSyncRepository = PendingSyncRepository(this)
-        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-            ?: "unknown-device"
-        syncManager = SyncManager(cloudFirestoreRepository, connectivityMonitor, pendingSyncRepository, deviceId)
+        syncManager = SyncManager.getInstance(this)
 
         val googleSignInLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
