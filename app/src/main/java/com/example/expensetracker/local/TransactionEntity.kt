@@ -20,5 +20,6 @@ data class TransactionEntity(
     val updatedAt: Long,
     val deleted: Boolean,
     val syncPending: Boolean,
+    val version: Long = 1L,
     val sequenceId: Long = 0L
 )

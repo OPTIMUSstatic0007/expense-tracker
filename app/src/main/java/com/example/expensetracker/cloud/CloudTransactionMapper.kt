@@ -14,7 +14,7 @@ object CloudTransactionMapper {
             deviceId = deviceId,
             createdAt = entity.createdAt,
             updatedAt = entity.updatedAt,
-            version = maxOf(1L, entity.updatedAt),
+            version = entity.version,
             syncStatus = SyncStatus.SYNCED.name,
             amount = entity.amount,
             type = entity.type,
@@ -33,6 +33,7 @@ object CloudTransactionMapper {
             note = transaction.note,
             createdAt = transaction.createdAt,
             updatedAt = transaction.updatedAt,
+            version = transaction.version,
             deleted = transaction.deleted,
             syncPending = false
         )

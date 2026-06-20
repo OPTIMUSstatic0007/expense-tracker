@@ -104,6 +104,25 @@ class CloudFirestoreRepository(
             .await()
     }
 
+    suspend fun getTransaction(transactionId: String): CloudTransaction? {
+        val user = requireDownloadUser()
+        val document = transactionDocument(transactionId)
+            .get()
+            .await()
+
+        if (!document.exists()) {
+            return null
+        }
+
+        val transaction = document.toCloudTransaction()
+        return if (transaction.ownerUid == user.uid) {
+            transaction
+        } else {
+            SyncLogger.warning("Cloud fetch skipped owner mismatch for transactionId=${document.id}")
+            null
+        }
+    }
+
     suspend fun downloadTransactions(): List<CloudTransaction> {
         val user = requireDownloadUser()
         val snapshot = transactionsCollection()

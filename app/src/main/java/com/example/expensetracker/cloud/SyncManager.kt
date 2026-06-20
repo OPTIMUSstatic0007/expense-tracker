@@ -137,7 +137,7 @@ class SyncManager(
             deviceId = deviceId,
             createdAt = now,
             updatedAt = now,
-            version = maxOf(1L, transaction.updatedAt),
+            version = transaction.version,
             transactionId = transaction.id,
             operationType = operationType,
             status = PendingSyncOperation.Status.PENDING
@@ -331,13 +331,19 @@ class SyncManager(
             return
         }
 
-        if (isSelfEcho(transaction, existing)) {
-            SyncLogger.info("Realtime MODIFIED ignored self echo transactionId=${transaction.id}")
-            return
-        }
+        when (val decision = ConflictResolver.resolve(existing, transaction)) {
+            ConflictResolver.Decision.USE_REMOTE -> {
+                logConflictDecision("Realtime MODIFIED", existing, transaction, decision)
+                repository.updateTransactionFromCloud(CloudTransactionMapper.toEntity(transaction))
+                SyncLogger.info("Realtime MODIFIED transactionId=${transaction.id}")
+            }
 
-        repository.updateTransactionFromCloud(CloudTransactionMapper.toEntity(transaction))
-        SyncLogger.info("Realtime MODIFIED transactionId=${transaction.id}")
+            ConflictResolver.Decision.USE_LOCAL,
+            ConflictResolver.Decision.NO_CHANGE -> {
+                logConflictDecision("Realtime MODIFIED", existing, transaction, decision)
+                SyncLogger.info("Realtime MODIFIED ignored transactionId=${transaction.id}")
+            }
+        }
     }
 
     private suspend fun applyRealtimeRemoved(
@@ -350,25 +356,24 @@ class SyncManager(
             return
         }
 
-        repository.softDeleteTransactionFromCloud(
-            id = transaction.id,
-            updatedAt = maxOf(transaction.updatedAt, existing.updatedAt)
-        )
-        SyncLogger.info("Realtime REMOVED transactionId=${transaction.id}")
-    }
+        val remoteDelete = transaction.copy(deleted = true)
+        when (val decision = ConflictResolver.resolve(existing, remoteDelete)) {
+            ConflictResolver.Decision.USE_REMOTE -> {
+                logConflictDecision("Realtime REMOVED", existing, remoteDelete, decision)
+                repository.softDeleteTransactionFromCloud(
+                    id = transaction.id,
+                    updatedAt = transaction.updatedAt,
+                    version = transaction.version
+                )
+                SyncLogger.info("Realtime REMOVED transactionId=${transaction.id}")
+            }
 
-    private fun isSelfEcho(
-        transaction: CloudTransaction,
-        existing: TransactionEntity
-    ): Boolean {
-        return transaction.deviceId == deviceId &&
-                existing.amount == transaction.amount &&
-                existing.type == transaction.type &&
-                existing.category == transaction.category &&
-                existing.note == transaction.note &&
-                existing.createdAt == transaction.createdAt &&
-                existing.updatedAt == transaction.updatedAt &&
-                existing.deleted == transaction.deleted
+            ConflictResolver.Decision.USE_LOCAL,
+            ConflictResolver.Decision.NO_CHANGE -> {
+                logConflictDecision("Realtime REMOVED", existing, remoteDelete, decision)
+                SyncLogger.info("Realtime REMOVED ignored transactionId=${transaction.id}")
+            }
+        }
     }
 
     private suspend fun downloadMissingTransactions() {
@@ -401,10 +406,33 @@ class SyncManager(
                 _syncState.value = SyncState.Syncing
                 val localCount = repository.getTransactionCount()
                 val cloudTransactions = cloudFirestoreRepository.downloadTransactions()
-                val entities = cloudTransactions.map(CloudTransactionMapper::toEntity)
-                val insertedCount = repository.insertMissingTransactionsFromCloud(entities)
+                var insertedCount = 0
+                var updatedCount = 0
+                var skippedCount = 0
+                cloudTransactions.forEach { cloudTransaction ->
+                    val existing = repository.getTransactionById(cloudTransaction.id)
+                    if (existing == null) {
+                        if (repository.insertTransactionFromCloud(CloudTransactionMapper.toEntity(cloudTransaction))) {
+                            insertedCount++
+                        }
+                    } else {
+                        when (val decision = ConflictResolver.resolve(existing, cloudTransaction)) {
+                            ConflictResolver.Decision.USE_REMOTE -> {
+                                logConflictDecision("Download", existing, cloudTransaction, decision)
+                                repository.updateTransactionFromCloud(CloudTransactionMapper.toEntity(cloudTransaction))
+                                updatedCount++
+                            }
+
+                            ConflictResolver.Decision.USE_LOCAL,
+                            ConflictResolver.Decision.NO_CHANGE -> {
+                                logConflictDecision("Download", existing, cloudTransaction, decision)
+                                skippedCount++
+                            }
+                        }
+                    }
+                }
                 SyncLogger.info(
-                    "Download complete: localCount=$localCount cloudCount=${cloudTransactions.size} insertedCount=$insertedCount"
+                    "Download complete: localCount=$localCount cloudCount=${cloudTransactions.size} insertedCount=$insertedCount updatedCount=$updatedCount skippedCount=$skippedCount"
                 )
                 _syncState.value = SyncState.Idle
             } catch (exception: Exception) {
@@ -463,7 +491,7 @@ class SyncManager(
                 }
 
                 _syncState.value = SyncState.Syncing
-                val completed = uploadWithRetry(nextOperation, transaction)
+                val completed = uploadWithRetry(nextOperation, transaction, repository)
                 if (!completed) {
                     return
                 }
@@ -479,7 +507,8 @@ class SyncManager(
 
     private suspend fun uploadWithRetry(
         operation: PendingSyncOperation,
-        transaction: TransactionEntity
+        transaction: TransactionEntity,
+        repository: LocalRepository
     ): Boolean {
         var currentOperation = operation
 
@@ -494,6 +523,33 @@ class SyncManager(
                 SyncLogger.info(
                     "Uploading operation: operation=${currentOperation.operationType.name} transactionId=${currentOperation.transactionId}"
                 )
+                val latestCloudTransaction = cloudFirestoreRepository.getTransaction(currentOperation.transactionId)
+                if (latestCloudTransaction != null) {
+                    when (val decision = ConflictResolver.resolve(transaction, latestCloudTransaction)) {
+                        ConflictResolver.Decision.USE_REMOTE -> {
+                            logConflictDecision("Upload", transaction, latestCloudTransaction, decision)
+                            repository.updateTransactionFromCloud(
+                                CloudTransactionMapper.toEntity(latestCloudTransaction)
+                            )
+                            SyncLogger.info(
+                                "Stale upload rejected: operation=${currentOperation.operationType.name} transactionId=${currentOperation.transactionId}"
+                            )
+                            return true
+                        }
+
+                        ConflictResolver.Decision.NO_CHANGE -> {
+                            logConflictDecision("Upload", transaction, latestCloudTransaction, decision)
+                            SyncLogger.info(
+                                "Upload skipped no change: operation=${currentOperation.operationType.name} transactionId=${currentOperation.transactionId}"
+                            )
+                            return true
+                        }
+
+                        ConflictResolver.Decision.USE_LOCAL -> {
+                            logConflictDecision("Upload", transaction, latestCloudTransaction, decision)
+                        }
+                    }
+                }
                 val cloudTransaction = CloudTransactionMapper.fromEntity(
                     entity = transaction,
                     ownerUid = currentOperation.ownerUid,
@@ -550,6 +606,22 @@ class SyncManager(
                 exception
             )
         }
+    }
+
+    private fun logConflictDecision(
+        source: String,
+        local: TransactionEntity,
+        remote: CloudTransaction,
+        decision: ConflictResolver.Decision
+    ) {
+        val winner = when (decision) {
+            ConflictResolver.Decision.USE_LOCAL -> "LOCAL"
+            ConflictResolver.Decision.USE_REMOTE -> "CLOUD"
+            ConflictResolver.Decision.NO_CHANGE -> "NO_CHANGE"
+        }
+        SyncLogger.info(
+            "Conflict: source=$source transactionId=${local.id} localVersion=${local.version} remoteVersion=${remote.version} localUpdatedAt=${local.updatedAt} remoteUpdatedAt=${remote.updatedAt} Winner=$winner"
+        )
     }
 
     private data class PendingRealtimeChange(

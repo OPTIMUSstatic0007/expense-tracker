@@ -26,9 +26,9 @@ class LocalRepository(
             database.withTransaction {
                 val entityToInsert = if (transaction.sequenceId == 0L) {
                     val maxSeq = transactionDao.getMaxSequenceId() ?: 0L
-                    transaction.copy(sequenceId = maxSeq + 1L)
+                    transaction.copy(sequenceId = maxSeq + 1L, version = maxOf(1L, transaction.version))
                 } else {
-                    transaction
+                    transaction.copy(version = maxOf(1L, transaction.version))
                 }
                 transactionDao.insertTransaction(entityToInsert)
                 entityToInsert
@@ -40,8 +40,13 @@ class LocalRepository(
     suspend fun updateTransaction(transaction: TransactionEntity) {
         val updatedEntity = withContext(Dispatchers.IO) {
             database.withTransaction {
-                transactionDao.updateTransaction(transaction)
-                transaction
+                val existing = transactionDao.getTransactionById(transaction.id)
+                val entityToUpdate = transaction.copy(
+                    version = (existing?.version ?: transaction.version) + 1L,
+                    syncPending = true
+                )
+                transactionDao.updateTransaction(entityToUpdate)
+                entityToUpdate
             }
         }
         syncManager?.onTransactionChanged(updatedEntity, PendingSyncOperation.OperationType.UPDATE)
@@ -111,12 +116,13 @@ class LocalRepository(
         }
     }
 
-    suspend fun softDeleteTransactionFromCloud(id: String, updatedAt: Long) {
+    suspend fun softDeleteTransactionFromCloud(id: String, updatedAt: Long, version: Long) {
         withContext(Dispatchers.IO) {
             transactionDao.softDeleteTransactionFromCloud(
                 id = id,
                 deleted = true,
-                updatedAt = updatedAt
+                updatedAt = updatedAt,
+                version = version
             )
         }
     }

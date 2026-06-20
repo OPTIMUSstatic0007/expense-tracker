@@ -18,11 +18,16 @@ interface TransactionDao {
     @Update
     fun updateTransaction(transaction: TransactionEntity)
 
-    @Query("UPDATE transactions SET deleted = :deleted, updatedAt = :updatedAt, syncPending = 1 WHERE id = :id")
+    @Query("UPDATE transactions SET deleted = :deleted, updatedAt = :updatedAt, version = version + 1, syncPending = 1 WHERE id = :id")
     fun softDeleteTransaction(id: String, deleted: Boolean = true, updatedAt: Long = System.currentTimeMillis())
 
-    @Query("UPDATE transactions SET deleted = :deleted, updatedAt = :updatedAt, syncPending = 0 WHERE id = :id")
-    fun softDeleteTransactionFromCloud(id: String, deleted: Boolean = true, updatedAt: Long = System.currentTimeMillis())
+    @Query("UPDATE transactions SET deleted = :deleted, updatedAt = :updatedAt, version = :version, syncPending = 0 WHERE id = :id")
+    fun softDeleteTransactionFromCloud(
+        id: String,
+        version: Long,
+        deleted: Boolean = true,
+        updatedAt: Long = System.currentTimeMillis()
+    )
 
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     fun getTransactionById(id: String): TransactionEntity?
