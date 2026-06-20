@@ -2,7 +2,7 @@ package com.example.expensetracker.repository
 
 import android.content.Context
 import androidx.room.withTransaction
-import com.example.expensetracker.cloud.PendingOperation
+import com.example.expensetracker.cloud.PendingSyncOperation
 import com.example.expensetracker.cloud.SyncManager
 import com.example.expensetracker.local.ExpenseDatabase
 import com.example.expensetracker.local.TransactionDao
@@ -34,7 +34,7 @@ class LocalRepository(
                 entityToInsert
             }
         }
-        syncManager?.onTransactionChanged(insertedEntity, PendingOperation.OperationType.CREATE)
+        syncManager?.onTransactionChanged(insertedEntity, PendingSyncOperation.OperationType.CREATE)
     }
 
     suspend fun updateTransaction(transaction: TransactionEntity) {
@@ -44,7 +44,7 @@ class LocalRepository(
                 transaction
             }
         }
-        syncManager?.onTransactionChanged(updatedEntity, PendingOperation.OperationType.UPDATE)
+        syncManager?.onTransactionChanged(updatedEntity, PendingSyncOperation.OperationType.UPDATE)
     }
 
     suspend fun softDeleteTransaction(id: String) {
@@ -55,7 +55,7 @@ class LocalRepository(
             }
         }
         if (deletedEntity != null) {
-            syncManager?.onTransactionChanged(deletedEntity, PendingOperation.OperationType.DELETE)
+            syncManager?.onTransactionChanged(deletedEntity, PendingSyncOperation.OperationType.DELETE)
         }
     }
 

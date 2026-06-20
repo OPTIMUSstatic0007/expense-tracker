@@ -8,6 +8,7 @@ import com.example.expensetracker.backup.BackupManager
 import com.example.expensetracker.backup.RestoreManager
 import com.example.expensetracker.cloud.CloudFirestoreRepository
 import com.example.expensetracker.cloud.ConnectivityMonitor
+import com.example.expensetracker.cloud.PendingSyncRepository
 import com.example.expensetracker.cloud.SyncManager
 import com.example.expensetracker.ui.screens.LoginScreen
 import com.example.expensetracker.ui.screens.SettingsScreen
@@ -80,6 +81,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var themeManager: ThemeManager
     private lateinit var cloudFirestoreRepository: CloudFirestoreRepository
     private lateinit var connectivityMonitor: ConnectivityMonitor
+    private lateinit var pendingSyncRepository: PendingSyncRepository
     private lateinit var syncManager: SyncManager
 
     // Navigation state — which screen to show when authenticated
@@ -94,9 +96,10 @@ class MainActivity : ComponentActivity() {
         themeManager = ThemeManager(this)
         cloudFirestoreRepository = CloudFirestoreRepository()
         connectivityMonitor = ConnectivityMonitor(this)
+        pendingSyncRepository = PendingSyncRepository(this)
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             ?: "unknown-device"
-        syncManager = SyncManager(cloudFirestoreRepository, connectivityMonitor, deviceId)
+        syncManager = SyncManager(cloudFirestoreRepository, connectivityMonitor, pendingSyncRepository, deviceId)
 
         val googleSignInLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()

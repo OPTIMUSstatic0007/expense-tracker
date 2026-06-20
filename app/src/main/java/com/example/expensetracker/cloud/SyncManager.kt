@@ -23,6 +23,7 @@ import kotlinx.coroutines.sync.withLock
 class SyncManager(
     private val cloudFirestoreRepository: CloudFirestoreRepository,
     private val connectivityMonitor: ConnectivityMonitor,
+    private val pendingSyncRepository: PendingSyncRepository,
     private val deviceId: String
 ) {
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Disabled("Awaiting authentication"))
@@ -32,11 +33,9 @@ class SyncManager(
     private var initializedUid: String? = null
     private val managerJob = SupervisorJob()
     private val managerScope = CoroutineScope(managerJob + Dispatchers.IO)
-    private val queueMutex = Mutex()
     private val uploadMutex = Mutex()
     private val downloadMutex = Mutex()
     private val realtimeMutex = Mutex()
-    private val pendingUploads = mutableListOf<PendingUpload>()
     private val pendingRealtimeChanges = mutableListOf<PendingRealtimeChange>()
     private var connectivityJob: Job? = null
     private var localRepository: LocalRepository? = null
@@ -67,6 +66,7 @@ class SyncManager(
         connectivityMonitor.start()
         observeConnectivity()
         attachRealtimeListener()
+        requestQueueRestore()
         requestUploadDrain()
         requestDownload()
         SyncLogger.info("SyncManager initialized for uid=${user.uid}")
@@ -101,9 +101,6 @@ class SyncManager(
         connectivityMonitor.stop()
         _syncState.value = SyncState.Disabled("Awaiting authentication")
         managerScope.launch {
-            queueMutex.withLock {
-                pendingUploads.clear()
-            }
             realtimeMutex.withLock {
                 pendingRealtimeChanges.clear()
             }
@@ -116,33 +113,37 @@ class SyncManager(
         localRepository = repository
         SyncLogger.info("SyncManager local repository attached")
         attachRealtimeListener()
+        requestQueueRestore()
+        requestUploadDrain()
         requestRealtimeDrain()
         requestDownload()
     }
 
     suspend fun onTransactionChanged(
         transaction: TransactionEntity,
-        operationType: PendingOperation.OperationType
+        operationType: PendingSyncOperation.OperationType
     ) {
-        val pendingOperation = PendingOperation(
-            id = UUID.randomUUID().toString(),
-            ownerUid = initializedUid.orEmpty(),
-            deviceId = deviceId,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
-            version = maxOf(1L, transaction.updatedAt),
-            syncStatus = SyncStatus.PENDING.name,
-            transactionId = transaction.id,
-            operationType = operationType
-        )
-
-        queueMutex.withLock {
-            pendingUploads.add(PendingUpload(pendingOperation, transaction))
+        val uid = initializedUid
+        if (uid.isNullOrBlank()) {
+            SyncLogger.warning("Queue insert skipped: authenticated user missing")
+            _syncState.value = SyncState.Disabled("Awaiting authentication")
+            return
         }
 
-        SyncLogger.info(
-            "Pending created: operation=${operationType.name} transactionId=${transaction.id}"
+        val now = System.currentTimeMillis()
+        val pendingOperation = PendingSyncOperation(
+            id = UUID.randomUUID().toString(),
+            ownerUid = uid,
+            deviceId = deviceId,
+            createdAt = now,
+            updatedAt = now,
+            version = maxOf(1L, transaction.updatedAt),
+            transactionId = transaction.id,
+            operationType = operationType,
+            status = PendingSyncOperation.Status.PENDING
         )
+
+        pendingSyncRepository.insert(pendingOperation)
         requestUploadDrain()
     }
 
@@ -154,9 +155,30 @@ class SyncManager(
         connectivityJob = managerScope.launch {
             connectivityMonitor.connectivityState.collectLatest { state ->
                 if (state is ConnectivityState.Online) {
+                    logQueueResume()
                     requestUploadDrain()
                     requestDownload()
                 }
+            }
+        }
+    }
+
+    private fun requestQueueRestore() {
+        managerScope.launch {
+            val uid = initializedUid ?: return@launch
+            val pendingCount = pendingSyncRepository.countPending(uid)
+            if (pendingCount > 0) {
+                SyncLogger.info("Queue restored: pending=$pendingCount")
+            }
+        }
+    }
+
+    private fun logQueueResume() {
+        managerScope.launch {
+            val uid = initializedUid ?: return@launch
+            val pendingCount = pendingSyncRepository.countPending(uid)
+            if (pendingCount > 0) {
+                SyncLogger.info("Queue resumed: pending=$pendingCount")
             }
         }
     }
@@ -400,72 +422,94 @@ class SyncManager(
                     return
                 }
 
-                val nextUpload = queueMutex.withLock {
-                    pendingUploads.firstOrNull {
-                        it.operation.syncStatus == SyncStatus.PENDING.name ||
-                                it.operation.syncStatus == SyncStatus.FAILED.name
-                    }
-                } ?: run {
-                    _syncState.value = SyncState.Idle
+                val uid = initializedUid
+                if (uid.isNullOrBlank()) {
+                    SyncLogger.warning("Upload skipped: authenticated user missing")
+                    _syncState.value = SyncState.Disabled("Awaiting authentication")
                     return
                 }
 
-                if (nextUpload.operation.ownerUid.isBlank()) {
+                val repository = localRepository
+                if (repository == null) {
+                    SyncLogger.info("Queue upload deferred: local repository unavailable")
+                    return
+                }
+
+                val nextOperation = pendingSyncRepository.getNextPending(uid) ?: run {
+                    _syncState.value = SyncState.Idle
+                    SyncLogger.info("Queue empty")
+                    return
+                }
+
+                if (nextOperation.ownerUid.isBlank()) {
                     SyncLogger.warning(
-                        "Authentication missing: pending upload has no ownerUid for transactionId=${nextUpload.operation.transactionId}"
+                        "Authentication missing: pending upload has no ownerUid for transactionId=${nextOperation.transactionId}"
                     )
                     _syncState.value = SyncState.Disabled("Awaiting authentication")
                     return
                 }
 
+                val transaction = repository.getTransactionById(nextOperation.transactionId)
+                if (transaction == null) {
+                    val failedOperation = pendingSyncRepository.markFailed(nextOperation)
+                    logUploadFailure(
+                        operation = failedOperation,
+                        exception = IllegalStateException("Local transaction missing")
+                    )
+                    if (failedOperation.status == PendingSyncOperation.Status.FAILED) {
+                        _syncState.value = SyncState.Error("Upload failed after max retries")
+                    }
+                    return
+                }
+
                 _syncState.value = SyncState.Syncing
-                val completed = uploadWithRetry(nextUpload)
+                val completed = uploadWithRetry(nextOperation, transaction)
                 if (!completed) {
                     return
                 }
 
-                queueMutex.withLock {
-                    pendingUploads.removeAll { it.operation.id == nextUpload.operation.id }
-                }
+                val completedOperation = pendingSyncRepository.markCompleted(nextOperation)
+                pendingSyncRepository.delete(completedOperation)
                 SyncLogger.info(
-                    "Upload succeeded: operation=${nextUpload.operation.operationType.name} transactionId=${nextUpload.operation.transactionId}"
+                    "Upload succeeded: operation=${nextOperation.operationType.name} transactionId=${nextOperation.transactionId}"
                 )
             }
         }
     }
 
-    private suspend fun uploadWithRetry(upload: PendingUpload): Boolean {
-        var currentOperation = upload.operation
+    private suspend fun uploadWithRetry(
+        operation: PendingSyncOperation,
+        transaction: TransactionEntity
+    ): Boolean {
+        var currentOperation = operation
 
         while (currentOperation.retryCount < FirestoreConstants.SYNC_RETRY_MAX_ATTEMPTS) {
             if (connectivityMonitor.connectivityState.value is ConnectivityState.Offline) {
-                queueMutex.withLock {
-                    replaceOperation(currentOperation.copy(syncStatus = SyncStatus.PENDING.name))
-                }
                 SyncLogger.info("Skipped because offline")
                 return false
             }
 
             try {
+                currentOperation = pendingSyncRepository.markUploading(currentOperation)
                 SyncLogger.info(
-                    "Upload started: operation=${currentOperation.operationType.name} transactionId=${currentOperation.transactionId}"
+                    "Uploading operation: operation=${currentOperation.operationType.name} transactionId=${currentOperation.transactionId}"
                 )
                 val cloudTransaction = CloudTransactionMapper.fromEntity(
-                    entity = upload.transaction,
+                    entity = transaction,
                     ownerUid = currentOperation.ownerUid,
                     deviceId = currentOperation.deviceId
                 )
 
                 when (currentOperation.operationType) {
-                    PendingOperation.OperationType.CREATE -> {
+                    PendingSyncOperation.OperationType.CREATE -> {
                         cloudFirestoreRepository.createTransaction(cloudTransaction)
                     }
 
-                    PendingOperation.OperationType.UPDATE -> {
+                    PendingSyncOperation.OperationType.UPDATE -> {
                         cloudFirestoreRepository.updateTransaction(cloudTransaction)
                     }
 
-                    PendingOperation.OperationType.DELETE -> {
+                    PendingSyncOperation.OperationType.DELETE -> {
                         cloudFirestoreRepository.softDeleteTransaction(
                             cloudTransaction.copy(deleted = true)
                         )
@@ -473,28 +517,10 @@ class SyncManager(
                 }
                 return true
             } catch (exception: Exception) {
-                val nextRetryCount = currentOperation.retryCount + 1
-                val nextStatus = if (nextRetryCount >= FirestoreConstants.SYNC_RETRY_MAX_ATTEMPTS) {
-                    SyncStatus.FAILED.name
-                } else {
-                    SyncStatus.PENDING.name
-                }
-                currentOperation = currentOperation.copy(
-                    updatedAt = System.currentTimeMillis(),
-                    attemptedAt = System.currentTimeMillis(),
-                    retryCount = nextRetryCount,
-                    syncStatus = nextStatus
-                )
-                queueMutex.withLock {
-                    replaceOperation(currentOperation)
-                }
+                currentOperation = pendingSyncRepository.markFailed(currentOperation)
+                logUploadFailure(currentOperation, exception)
 
-                SyncLogger.error(
-                    "Upload failed: operation=${currentOperation.operationType.name} transactionId=${currentOperation.transactionId} retryCount=${currentOperation.retryCount}",
-                    exception
-                )
-
-                if (currentOperation.retryCount >= FirestoreConstants.SYNC_RETRY_MAX_ATTEMPTS) {
+                if (currentOperation.status == PendingSyncOperation.Status.FAILED) {
                     _syncState.value = SyncState.Error("Upload failed after max retries")
                     return false
                 }
@@ -509,18 +535,22 @@ class SyncManager(
         return false
     }
 
-    private fun replaceOperation(operation: PendingOperation) {
-        val index = pendingUploads.indexOfFirst { it.operation.id == operation.id }
-        if (index >= 0) {
-            val currentUpload = pendingUploads[index]
-            pendingUploads[index] = currentUpload.copy(operation = operation)
+    private fun logUploadFailure(
+        operation: PendingSyncOperation,
+        exception: Exception
+    ) {
+        if (operation.status == PendingSyncOperation.Status.FAILED) {
+            SyncLogger.error(
+                "Failed permanently: operation=${operation.operationType.name} transactionId=${operation.transactionId} retryCount=${operation.retryCount}",
+                exception
+            )
+        } else {
+            SyncLogger.error(
+                "Upload failed: operation=${operation.operationType.name} transactionId=${operation.transactionId} retryCount=${operation.retryCount}",
+                exception
+            )
         }
     }
-
-    private data class PendingUpload(
-        val operation: PendingOperation,
-        val transaction: TransactionEntity
-    )
 
     private data class PendingRealtimeChange(
         val changeType: DocumentChange.Type,
