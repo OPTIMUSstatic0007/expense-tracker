@@ -427,6 +427,10 @@ class SyncManager private constructor(
         )
         if (inserted) {
             SyncLogger.info("Realtime ADDED transactionId=${transaction.id}")
+        managerScope.launch {
+            _localRecordsCount.value = repository.getTransactionCount()
+            _cloudRecordsCount.value = cloudFirestoreRepository.getTransactionCount()
+        }
             _localRecordsCount.value = repository.getTransactionCount()
         }
     }
@@ -446,6 +450,10 @@ class SyncManager private constructor(
                 logConflictDecision("Realtime MODIFIED", existing, transaction, decision)
                 repository.updateTransactionFromCloud(CloudTransactionMapper.toEntity(transaction))
                 SyncLogger.info("Realtime MODIFIED transactionId=${transaction.id}")
+                managerScope.launch {
+                    _localRecordsCount.value = repository.getTransactionCount()
+                    _cloudRecordsCount.value = cloudFirestoreRepository.getTransactionCount()
+                }
                 _localRecordsCount.value = repository.getTransactionCount()
             }
 
@@ -477,6 +485,10 @@ class SyncManager private constructor(
                     version = transaction.version
                 )
                 SyncLogger.info("Realtime REMOVED transactionId=${transaction.id}")
+                managerScope.launch {
+                    _localRecordsCount.value = repository.getTransactionCount()
+                    _cloudRecordsCount.value = cloudFirestoreRepository.getTransactionCount()
+                }
                 _localRecordsCount.value = repository.getTransactionCount()
             }
 
@@ -613,6 +625,12 @@ class SyncManager private constructor(
 
                 val completedOperation = pendingSyncRepository.markCompleted(nextOperation)
                 pendingSyncRepository.delete(completedOperation)
+                _pendingQueueCount.value = java.lang.Math.max(0, _pendingQueueCount.value - 1)
+                managerScope.launch {
+                    _localRecordsCount.value = repository.getTransactionCount()
+                    _cloudRecordsCount.value = cloudFirestoreRepository.getTransactionCount()
+                }
+                _lastSyncTime.value = System.currentTimeMillis()
                 SyncLogger.info(
                     "Upload succeeded: operation=${nextOperation.operationType.name} transactionId=${nextOperation.transactionId}"
                 )

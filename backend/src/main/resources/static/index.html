@@ -59,10 +59,6 @@
                         <span class="drawer-status-label">Sync Status</span>
                         <span class="drawer-status-value drawer-sync-indicator" id="drawer-sync-status">—</span>
                     </div>
-                    <div class="drawer-status-row">
-                        <span class="drawer-status-label">App Version</span>
-                        <span class="drawer-status-value" id="drawer-app-version">v1.0</span>
-                    </div>
                 </div>
             </div>
             <!-- ANALYTICS Section -->
@@ -77,13 +73,17 @@
                 </button>
             </div>
 
-            <!-- FUTURE Section — placeholders -->
+            <!-- ACCOUNT Section -->
             <div class="nav-drawer-section">
                 <div class="nav-drawer-section-title">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-                    Future
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    Account
                 </div>
-                                <button id="theme-toggle-btn" class="nav-drawer-item nav-drawer-link-btn">
+                <button id="drawer-settings-link" class="nav-drawer-item nav-drawer-link-btn">
+                    <span>Settings</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+                <button id="theme-toggle-btn" class="nav-drawer-item nav-drawer-link-btn">
                     <span>Theme</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="5"></circle>
@@ -239,13 +239,53 @@
                         <span class="db-center-metric-value" id="dbcenter-total-backups">—</span>
                     </div>
                     <div class="db-center-metric">
+                        <span class="db-center-metric-label">Backup Storage</span>
+                        <span class="db-center-metric-value" id="dbcenter-backup-storage">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Backup Health</span>
+                        <span class="db-center-metric-value db-center-health-badge" id="dbcenter-backup-health">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Auto / Manual / Emergency</span>
+                        <span class="db-center-metric-value" id="dbcenter-backup-breakdown">—</span>
+                    </div>
+                    <div class="db-center-metric">
                         <span class="db-center-metric-label">Last Export</span>
                         <span class="db-center-metric-value" id="dbcenter-last-export">—</span>
                     </div>
+
                     <div class="db-center-metric db-center-metric-full">
-                        <span class="db-center-metric-label">Sync Status</span>
-                        <span class="db-center-metric-value db-center-sync-badge" id="dbcenter-sync-status">—</span>
+                        <span class="db-center-metric-label">Cloud Sync</span>
+                        <div class="db-center-sync-details">
+                            <div class="sync-detail-row">
+                                <span>Status:</span>
+                                <span id="dbcenter-cloud-status" class="db-center-sync-badge">—</span>
+                            </div>
+                            <div class="sync-detail-row">
+                                <span>Connection:</span>
+                                <span id="dbcenter-cloud-connection">—</span>
+                            </div>
+                            <div class="sync-detail-row">
+                                <span>Pending Queue:</span>
+                                <span id="dbcenter-cloud-pending">—</span>
+                            </div>
+                            <div class="sync-detail-row">
+                                <span>Last Sync:</span>
+                                <span id="dbcenter-cloud-last-sync">—</span>
+                            </div>
+                            <div class="sync-detail-row">
+                                <span>Cloud Records:</span>
+                                <span id="dbcenter-cloud-records">—</span>
+                            </div>
+                            <div class="sync-detail-row">
+                                <span>Local Records:</span>
+                                <span id="dbcenter-cloud-local-records">—</span>
+                            </div>
+                            <button id="btn-sync-now" class="action-btn outline-btn" style="margin-top: 10px; width: 100%;">Sync Now</button>
+                        </div>
                     </div>
+
                 </div>
             </div>
         </div>

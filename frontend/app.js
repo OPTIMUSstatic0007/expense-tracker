@@ -149,7 +149,23 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTransactions();
     updateBackupStatus();
     setupEventListeners();
+    startSyncStatusPolling();
 });
+
+
+function startSyncStatusPolling() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.getSyncState === 'function') {
+        setInterval(() => {
+            updateDrawerStatus();
+
+            // Only update DB center if it's open to save DOM updates, or just update it anyway
+            const dbCenterPanel = document.getElementById('db-center-panel');
+            if (dbCenterPanel && dbCenterPanel.classList.contains('is-open')) {
+                fetchDbStats();
+            }
+        }, 1000); // Poll every 1 second
+    }
+}
 
 function setupEventListeners() {
     // Filter Listeners

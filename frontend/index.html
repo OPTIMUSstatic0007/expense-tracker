@@ -59,10 +59,6 @@
                         <span class="drawer-status-label">Sync Status</span>
                         <span class="drawer-status-value drawer-sync-indicator" id="drawer-sync-status">—</span>
                     </div>
-                    <div class="drawer-status-row">
-                        <span class="drawer-status-label">App Version</span>
-                        <span class="drawer-status-value" id="drawer-app-version">v1.0</span>
-                    </div>
                 </div>
             </div>
             <!-- ANALYTICS Section -->
@@ -258,10 +254,38 @@
                         <span class="db-center-metric-label">Last Export</span>
                         <span class="db-center-metric-value" id="dbcenter-last-export">—</span>
                     </div>
+
                     <div class="db-center-metric db-center-metric-full">
-                        <span class="db-center-metric-label">Sync Status</span>
-                        <span class="db-center-metric-value db-center-sync-badge" id="dbcenter-sync-status">—</span>
+                        <span class="db-center-metric-label">Cloud Sync</span>
+                        <div class="db-center-sync-details">
+                            <div class="sync-detail-row">
+                                <span>Status:</span>
+                                <span id="dbcenter-cloud-status" class="db-center-sync-badge">—</span>
+                            </div>
+                            <div class="sync-detail-row">
+                                <span>Connection:</span>
+                                <span id="dbcenter-cloud-connection">—</span>
+                            </div>
+                            <div class="sync-detail-row">
+                                <span>Pending Queue:</span>
+                                <span id="dbcenter-cloud-pending">—</span>
+                            </div>
+                            <div class="sync-detail-row">
+                                <span>Last Sync:</span>
+                                <span id="dbcenter-cloud-last-sync">—</span>
+                            </div>
+                            <div class="sync-detail-row">
+                                <span>Cloud Records:</span>
+                                <span id="dbcenter-cloud-records">—</span>
+                            </div>
+                            <div class="sync-detail-row">
+                                <span>Local Records:</span>
+                                <span id="dbcenter-cloud-local-records">—</span>
+                            </div>
+                            <button id="btn-sync-now" class="action-btn outline-btn" style="margin-top: 10px; width: 100%;">Sync Now</button>
+                        </div>
                     </div>
+
                 </div>
             </div>
         </div>
