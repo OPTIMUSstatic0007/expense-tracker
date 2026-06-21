@@ -339,7 +339,7 @@ fun ExpenseTrackerWebView(
                     val lifecycleManager = BackupLifecycleManager(context, backupManager)
                     val restoreManager = RestoreManager(context, database, backupManager, lifecycleManager)
                     addJavascriptInterface(
-                        AndroidBridge(repository, backupManager, restoreManager, lifecycleManager, context, themeManager ?: ThemeManager(context), onOpenSettings),
+                        AndroidBridge(repository, backupManager, restoreManager, lifecycleManager, context, themeManager ?: ThemeManager(context), syncManager, onOpenSettings),
                         "AndroidBridge"
                     )
 

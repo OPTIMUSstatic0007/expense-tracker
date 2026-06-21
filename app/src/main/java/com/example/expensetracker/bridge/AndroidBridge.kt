@@ -11,6 +11,7 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.json.JSONArray
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.util.UUID
 import java.util.Calendar
 import java.text.SimpleDateFormat
@@ -30,8 +31,100 @@ class AndroidBridge(
     private val lifecycleManager: BackupLifecycleManager,
     private val context: Context,
     private val themeManager: ThemeManager,
+    private val syncManager: com.example.expensetracker.cloud.SyncManager? = null,
     private val onOpenSettings: (() -> Unit)? = null
 ) {
+
+    // ═══ SYNC BRIDGE ═══
+
+
+
+
+    // ═══ SYNC BRIDGE ═══
+
+    @JavascriptInterface
+    fun getSyncState(): String {
+        Log.d("AndroidBridge", "getSyncState called")
+        val response = JSONObject()
+        val sm = syncManager
+        if (sm == null) {
+            response.put("status", "Error")
+            response.put("connection", "UNKNOWN")
+            response.put("pendingQueue", 0)
+            response.put("isSyncing", false)
+            response.put("lastSync", 0)
+            response.put("localRecords", 0)
+            response.put("cloudRecords", 0)
+            response.put("hasError", true)
+            response.put("errorMessage", "SyncManager is not initialized")
+            return response.toString()
+        }
+
+        val syncState = sm.syncState.value
+        val connectivity = sm.connectivityState.value
+        val pendingCount = sm.pendingQueueCount.value
+        val lastSync = sm.lastSyncTime.value
+        val localRecords = sm.localRecordsCount.value
+        val cloudRecords = sm.cloudRecordsCount.value
+
+        var status = "Unknown"
+        var isSyncing = false
+        var hasError = false
+        var errorMessage: String? = null
+
+        when (syncState) {
+            is com.example.expensetracker.cloud.SyncState.Idle -> {
+                status = "Synced"
+            }
+            is com.example.expensetracker.cloud.SyncState.Syncing -> {
+                status = "Syncing..."
+                isSyncing = true
+            }
+            is com.example.expensetracker.cloud.SyncState.Error -> {
+                status = "Error"
+                hasError = true
+                errorMessage = syncState.message
+            }
+            is com.example.expensetracker.cloud.SyncState.Disabled -> {
+                status = "Sign In Required"
+            }
+        }
+
+        val connectionStatus = when (connectivity) {
+            is com.example.expensetracker.cloud.ConnectivityState.Online -> "Online"
+            is com.example.expensetracker.cloud.ConnectivityState.Offline -> "Offline"
+            else -> "Unknown"
+        }
+
+        if (connectivity is com.example.expensetracker.cloud.ConnectivityState.Offline) {
+            status = "Offline"
+        } else if (pendingCount > 0 && !isSyncing) {
+            status = "Pending Sync"
+        }
+
+        response.put("status", status)
+        response.put("connection", connectionStatus)
+        response.put("pendingQueue", pendingCount)
+        response.put("isSyncing", isSyncing)
+        response.put("lastSync", lastSync)
+        response.put("localRecords", localRecords)
+        response.put("cloudRecords", cloudRecords)
+        response.put("hasError", hasError)
+        response.put("errorMessage", errorMessage ?: JSONObject.NULL)
+
+        return response.toString()
+    }
+
+    @JavascriptInterface
+    fun triggerSync() {
+        Log.d("AndroidBridge", "triggerSync called")
+        syncManager?.let { sm ->
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                sm.performBackgroundSync()
+            }
+        }
+    }
+
 
     /**
      * Called from WebView JavaScript when the user taps the

@@ -123,6 +123,17 @@ class CloudFirestoreRepository(
         }
     }
 
+    suspend fun getTransactionCount(): Int {
+        val user = requireDownloadUser()
+        return transactionsCollection()
+            .whereEqualTo(FirestoreConstants.FIELD_DELETED, false)
+            .count()
+            .get(com.google.firebase.firestore.AggregateSource.SERVER)
+            .await()
+            .count
+            .toInt()
+    }
+
     suspend fun downloadTransactions(): List<CloudTransaction> {
         val user = requireDownloadUser()
         val snapshot = transactionsCollection()

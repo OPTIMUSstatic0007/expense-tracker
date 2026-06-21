@@ -12,31 +12,67 @@ let isLoadingMore = false;
 
 // ═══════════════════════════════════════════════════════════════════
 // THEME MANAGEMENT
+// Single source of truth: AndroidBridge (SharedPreferences) when
+// running inside the Android WebView; falls back to localStorage
+// for desktop/browser preview.
 // ═══════════════════════════════════════════════════════════════════
-function initTheme() {
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+/**
+ * Apply a theme to the page. Called from:
+ * 1. Android via evaluateJavascript("applyTheme('dark')")
+ * 2. initTheme() on page load
+ * 3. toggleTheme() on drawer button click
+ */
+function applyTheme(mode) {
+    if (mode === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
     } else {
         document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+    }
+    // Refresh to pick up new theme colors in charts
+    if (typeof refreshData === 'function') {
+        refreshData();
+    }
+}
+
+function initTheme() {
+    // When running inside Android WebView, ask the bridge for the
+    // persisted theme (SharedPreferences) so we stay in sync.
+    if (window.AndroidBridge && typeof window.AndroidBridge.getTheme === 'function') {
+        try {
+            var bridgeTheme = window.AndroidBridge.getTheme();
+            applyTheme(bridgeTheme);
+            return;
+        } catch (e) {
+            console.warn('AndroidBridge.getTheme() failed, falling back to localStorage', e);
+        }
+    }
+    // Fallback: localStorage (desktop/browser)
+    var savedTheme = localStorage.getItem('theme');
+    var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+        applyTheme('dark');
+    } else {
+        applyTheme('light');
     }
 }
 
 function toggleTheme() {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    if (isDark) {
-        document.documentElement.removeAttribute('data-theme');
-        localStorage.setItem('theme', 'light');
-    } else {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        localStorage.setItem('theme', 'dark');
-    }
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    var nextMode = isDark ? 'light' : 'dark';
 
-    // Refresh to pick up new theme colors in charts
-    if (typeof refreshData === 'function') {
-        refreshData();
+    // 1. Optimistic UI update for instant feedback
+    applyTheme(nextMode);
+
+    // 2. Sync state with native Android app
+    if (window.AndroidBridge && window.AndroidBridge.setTheme) {
+        try {
+            window.AndroidBridge.setTheme(nextMode);
+        } catch (e) {
+            console.warn('AndroidBridge.setTheme() failed', e);
+        }
     }
 }
 
@@ -176,6 +212,8 @@ function setupEventListeners() {
 
     // Backup & Restore
     if (snapshotBtn) snapshotBtn.addEventListener('click', async () => {
+        console.log('[SNAPSHOT] desktop snapshotBtn click received');
+        console.log('[SNAPSHOT] current page before backup:', window.location.href);
         setLoading(snapshotBtn, true, 'Create Restore Point');
         if (backupStatusEl) {
             backupStatusEl.innerText = 'Creating Snapshot';
@@ -183,8 +221,11 @@ function setupEventListeners() {
         }
         try {
             if (window.AndroidBridge && typeof window.AndroidBridge.backupDatabase === 'function') {
+                console.log('[SNAPSHOT] desktop: calling AndroidBridge.backupDatabase()');
                 const responseJson = window.AndroidBridge.backupDatabase();
+                console.log('[SNAPSHOT] desktop: raw response:', responseJson);
                 const response = JSON.parse(responseJson);
+                console.log('[SNAPSHOT] desktop: parsed response:', JSON.stringify(response));
                 if (response.status === 'success') {
                     if (backupStatusEl) {
                         backupStatusEl.innerText = 'Restore Point Created';
@@ -198,6 +239,7 @@ function setupEventListeners() {
                     if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
                 }
             } else {
+                console.log('[SNAPSHOT] desktop: no AndroidBridge, using fetch');
                 const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
                 if (response.ok) {
                     if (backupStatusEl) {
@@ -212,14 +254,18 @@ function setupEventListeners() {
                 }
             }
         } catch (e) {
+            console.error('[SNAPSHOT] desktop: exception:', e);
             showToast('Network error or exception', 'error');
             if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
         } finally {
+            console.log('[SNAPSHOT] desktop: finally block, page is:', window.location.href);
             setLoading(snapshotBtn, false, 'Create Restore Point');
         }
     });
 
     if (backupBtn) backupBtn.addEventListener('click', () => {
+        console.log('[BACKUP] desktop backupBtn click received');
+        console.log('[BACKUP] WARNING: this handler does window.location.href redirect!');
         showToast('Preparing database backup...', 'info');
         window.location.href = `${BACKUP_BASE_URL}/database`;
         setTimeout(() => { if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics(); }, 2000);
@@ -362,6 +408,17 @@ function setupNavDrawer() {
     if (!hamburgerBtn || !navDrawer || !navDrawerScrim) return;
 
 
+    // Settings link → open native Settings/Profile screen
+    const drawerSettingsLink = document.getElementById('drawer-settings-link');
+    if (drawerSettingsLink) {
+        drawerSettingsLink.addEventListener('click', () => {
+            closeNavDrawer();
+            if (window.AndroidBridge && typeof window.AndroidBridge.openSettings === 'function') {
+                window.AndroidBridge.openSettings();
+            }
+        });
+    }
+
     const themeToggleBtn = document.getElementById('theme-toggle-btn');
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener('click', () => {
@@ -388,7 +445,13 @@ function setupNavDrawer() {
     // 1. Create Restore Point — reuses existing /backup/snapshot API
     const drawerSnapshotBtn = document.getElementById('drawer-snapshot-btn');
     if (drawerSnapshotBtn) {
-        drawerSnapshotBtn.addEventListener('click', async () => {
+        drawerSnapshotBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[SNAPSHOT] drawer-snapshot-btn click received');
+            console.log('[SNAPSHOT] current page:', window.location.href);
+            console.log('[SNAPSHOT] event target:', e.target.id || e.target.className);
+            console.log('[SNAPSHOT] db-center-panel open?', document.getElementById('db-center-panel')?.classList.contains('is-open'));
             const textEl  = drawerSnapshotBtn.querySelector('.db-center-action-text');
             const loader  = drawerSnapshotBtn.querySelector('.drawer-action-loader');
             const origText = 'Create Restore Point';
@@ -399,16 +462,26 @@ function setupNavDrawer() {
 
             try {
                 if (window.AndroidBridge && typeof window.AndroidBridge.backupDatabase === 'function') {
+                    console.log('[SNAPSHOT] calling AndroidBridge.backupDatabase()');
                     const responseStr = window.AndroidBridge.backupDatabase();
+                    console.log('[SNAPSHOT] raw response:', responseStr);
                     const response = JSON.parse(responseStr);
+                    console.log('[SNAPSHOT] parsed response:', JSON.stringify(response));
+                    console.log('[SNAPSHOT] backup completed, status:', response.status);
                     if (response.status === 'success') {
+                        console.log('[SNAPSHOT] calling showToast with message:', response.message);
                         showToast(response.message || 'Restore point created', 'success');
+                        console.log('[SNAPSHOT] calling updateBackupStatus()');
                         updateBackupStatus();
+                        console.log('[SNAPSHOT] calling fetchDbStats()');
                         fetchDbStats();
+                        console.log('[SNAPSHOT] post-success page:', window.location.href);
                     } else {
+                        console.log('[SNAPSHOT] backup failed:', response.message);
                         showToast(response.message || 'Failed to create snapshot', 'error');
                     }
                 } else {
+                    console.log('[SNAPSHOT] no AndroidBridge, using fetch');
                     const response = await fetch(`${BACKUP_BASE_URL}/snapshot`, { method: 'POST' });
                     if (response.ok) {
                         showToast('Restore point created');
@@ -419,8 +492,11 @@ function setupNavDrawer() {
                     }
                 }
             } catch (e) {
+                console.error('[SNAPSHOT] exception:', e);
                 showToast('Network error or exception', 'error');
             } finally {
+                console.log('[SNAPSHOT] finally block, page is:', window.location.href);
+                console.log('[SNAPSHOT] db-center-panel still open?', document.getElementById('db-center-panel')?.classList.contains('is-open'));
                 drawerSnapshotBtn.disabled = false;
                 if (textEl) textEl.innerText = origText;
                 if (loader) loader.classList.add('hidden');
@@ -460,10 +536,19 @@ function setupNavDrawer() {
 
     // Refresh Backup Metrics functionality
     window.refreshBackupMetrics = function() {
-        if (isMobile && window.AndroidBridge && window.AndroidBridge.getBackupStatus) {
+        console.log('[SNAPSHOT] refreshBackupMetrics called');
+        console.log('[SNAPSHOT] isMobile (raw ref, no parens):', isMobile);
+        console.log('[SNAPSHOT] isMobile() (called):', isMobile());
+        console.log('[SNAPSHOT] typeof isMobile:', typeof isMobile);
+        console.log('[SNAPSHOT] AndroidBridge present:', !!window.AndroidBridge);
+        console.log('[SNAPSHOT] getBackupStatus present:', !!(window.AndroidBridge && window.AndroidBridge.getBackupStatus));
+        if (isMobile() && window.AndroidBridge && window.AndroidBridge.getBackupStatus) {
+            console.log('[SNAPSHOT] refreshBackupMetrics: entered isMobile branch (parens added)');
             try {
                 const statusStr = window.AndroidBridge.getBackupStatus();
+                console.log('[SNAPSHOT] getBackupStatus raw:', statusStr);
                 const status = JSON.parse(statusStr);
+                console.log('[SNAPSHOT] getBackupStatus parsed:', JSON.stringify(status));
 
                 const lastBackupEl = document.getElementById('dbcenter-last-backup');
                 const totalBackupsEl = document.getElementById('dbcenter-total-backups');
@@ -474,40 +559,258 @@ function setupNavDrawer() {
                 if (dbSizeEl && status.latestBackupSize) dbSizeEl.textContent = status.latestBackupSize;
 
             } catch (e) {
-                console.error("Error refreshing backup metrics:", e);
+                console.error('[SNAPSHOT] refreshBackupMetrics error:', e);
             }
+        } else {
+            console.log('[SNAPSHOT] refreshBackupMetrics: skipped (condition false)');
         }
     }
 
-    // 3. Restore Database — triggers existing file input
+    // 3. Restore Database — mobile restore UI in DB Center panel
     const drawerRestoreBtn = document.getElementById('drawer-restore-btn');
+    console.log('[RESTORE] drawer-restore-btn element found:', !!drawerRestoreBtn);
     if (drawerRestoreBtn) {
-        drawerRestoreBtn.addEventListener('click', () => {
-            closeDbCenter();
-            // Wait for drawer close animation before opening the management section
-            setTimeout(() => {
-                const mgmtHeader = document.querySelector('.mgmt-header');
-                if (mgmtHeader) {
-                    mgmtHeader.scrollIntoView({ behavior: 'smooth' });
-                    // Highlight the select to prompt user action
-                    const selectEl = document.getElementById('available-backups-select');
-                    if (selectEl) {
+        let selectedBackupFileName = null;
+        let backupsData = [];
+        let showingCount = 5;
+
+        drawerRestoreBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[RESTORE_UI] drawer-restore-btn clicked');
+
+            let ui = document.getElementById('mobile-restore-ui');
+            if (!ui) {
+                ui = document.createElement('div');
+                ui.id = 'mobile-restore-ui';
+                ui.style.cssText = 'margin-top: 16px; padding: 16px; background: var(--background); border-radius: 12px; border: 1px solid var(--border); display: none;';
+                ui.innerHTML = `
+                    <h4 style="margin-bottom: 14px; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">Select Backup to Restore</h4>
+                    <div id="backup-list-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; max-height: 600px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+                    <button id="show-more-backups-btn" class="btn-outline" style="position: relative !important; width: 100%; padding: 10px; font-size: 0.8rem; margin-bottom: 12px; display: none; bottom: auto; border-radius: 8px;">Show More</button>
+                    <button id="mobile-do-restore-btn" class="btn-primary" style="position: relative !important; width: 100%; padding: 12px; font-size: 0.875rem; bottom: auto; margin-bottom: 0; border-radius: 8px; opacity: 0.5;" disabled>
+                        <span class="btn-text">Restore Selected</span>
+                        <span class="btn-loader hidden" style="margin-left: 8px;"></span>
+                    </button>
+                `;
+                // Append outside the .db-center-card to avoid overflow:hidden clipping
+                const operationsCard = drawerRestoreBtn.closest('.db-center-card');
+                if (operationsCard && operationsCard.parentElement) {
+                    operationsCard.parentElement.insertBefore(ui, operationsCard.nextSibling);
+                } else {
+                    drawerRestoreBtn.parentElement.appendChild(ui);
+                }
+
+                document.getElementById('show-more-backups-btn').addEventListener('click', () => {
+                    console.log('[RESTORE_UI] show more clicked, expanding to 15');
+                    showingCount = 15;
+                    renderBackups();
+                });
+
+                document.getElementById('mobile-do-restore-btn').addEventListener('click', () => {
+                    if (!selectedBackupFileName) return;
+                    console.log('[RESTORE_UI] restore requested=' + selectedBackupFileName);
+
+                    // Custom confirmation dialog
+                    if (!confirm(
+                        'Restore backup\n\n' +
+                        selectedBackupFileName + '\n\n' +
+                        'Current database will be replaced.\n' +
+                        'An emergency backup will be created first.'
+                    )) {
+                        console.log('[RESTORE_UI] user cancelled restore');
+                        return;
+                    }
+
+                    if (window.AndroidBridge && typeof window.AndroidBridge.restoreDatabase === 'function') {
+                        const btn = document.getElementById('mobile-do-restore-btn');
+                        const textSpan = btn.querySelector('.btn-text');
+                        const loader = btn.querySelector('.btn-loader');
+                        textSpan.innerText = 'Restoring...';
+                        loader.classList.remove('hidden');
+                        btn.disabled = true;
+                        btn.style.opacity = '0.5';
+
                         setTimeout(() => {
-                            selectEl.focus();
-                            selectEl.style.boxShadow = '0 0 0 2px var(--accent)';
-                            setTimeout(() => selectEl.style.boxShadow = '', 2000);
-                        }, 500);
+                            try {
+                                console.log('[RESTORE_UI] calling AndroidBridge.restoreDatabase(' + selectedBackupFileName + ')');
+                                const responseJson = window.AndroidBridge.restoreDatabase(selectedBackupFileName);
+                                console.log('[RESTORE_UI] restore response raw:', responseJson);
+                                const response = JSON.parse(responseJson);
+                                console.log('[RESTORE_UI] restore response parsed:', JSON.stringify(response));
+
+                                if (response.status === 'success') {
+                                    console.log('[RESTORE_UI] restore completed');
+                                    showToast('Database restored successfully! Reloading...', 'success');
+                                    // Refresh metrics and ledger before reload
+                                    if (typeof window.refreshBackupMetrics === 'function') window.refreshBackupMetrics();
+                                    if (typeof fetchDbStats === 'function') fetchDbStats();
+                                    setTimeout(() => window.location.reload(), 1500);
+                                } else {
+                                    console.log('[RESTORE_UI] restore failed:', response.message);
+                                    showToast('Restore failed: ' + (response.message || 'Unknown error'), 'error');
+                                    textSpan.innerText = 'Restore Selected';
+                                    loader.classList.add('hidden');
+                                    btn.disabled = false;
+                                    btn.style.opacity = '1';
+                                }
+                            } catch (e) {
+                                console.error('[RESTORE_UI] restore exception:', e);
+                                showToast('Restore error: ' + e.message, 'error');
+                                textSpan.innerText = 'Restore Selected';
+                                loader.classList.add('hidden');
+                                btn.disabled = false;
+                                btn.style.opacity = '1';
+                            }
+                        }, 100);
+                    } else {
+                        console.log('[RESTORE_UI] no AndroidBridge.restoreDatabase available');
+                        showToast('Restore is only available on Android', 'error');
+                    }
+                });
+            }
+
+            function renderBackups() {
+                const container = document.getElementById('backup-list-container');
+                if (!container) return;
+                container.innerHTML = '';
+                const displayList = backupsData.slice(0, showingCount);
+                console.log('[RESTORE_UI] showing latest backups count=' + displayList.length);
+
+                if (displayList.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.875rem; padding: 16px 0; text-align: center;">No backups available</div>';
+                    document.getElementById('show-more-backups-btn').style.display = 'none';
+                    return;
+                }
+
+                displayList.forEach((backup, index) => {
+                    const date = new Date(backup.timestamp);
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const formattedDate = date.getDate().toString().padStart(2, '0') + ' ' +
+                        months[date.getMonth()] + ' ' +
+                        date.getFullYear() + ' ' +
+                        date.getHours().toString().padStart(2, '0') + ':' +
+                        date.getMinutes().toString().padStart(2, '0');
+                    const sizeStr = (backup.sizeBytes / 1024).toFixed(1) + ' KB';
+
+                    let typeLabel = 'Unknown Backup';
+                    let typeColor = 'var(--text-secondary)';
+                    let typeBg = 'var(--surface-alt, rgba(0,0,0,0.04))';
+                    if (backup.backupType === 'manual') {
+                        typeLabel = 'Manual Backup';
+                        typeColor = '#4A90E2';
+                        typeBg = 'rgba(74, 144, 226, 0.1)';
+                    } else if (backup.backupType === 'auto') {
+                        typeLabel = 'Auto Backup';
+                        typeColor = '#50C878';
+                        typeBg = 'rgba(80, 200, 120, 0.1)';
+                    } else if (backup.backupType === 'emergency') {
+                        typeLabel = 'Emergency Backup';
+                        typeColor = '#E8913A';
+                        typeBg = 'rgba(232, 145, 58, 0.1)';
+                    }
+
+                    const isSelected = selectedBackupFileName === backup.fileName;
+                    const card = document.createElement('div');
+                    card.style.cssText = `
+                        min-height: 110px;
+                        padding: 16px;
+                        border-radius: 10px;
+                        border: ${isSelected ? '2px solid #4A90E2' : '1px solid var(--border)'};
+                        background: ${isSelected ? 'rgba(74, 144, 226, 0.06)' : 'var(--surface)'};
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                        flex-shrink: 0;
+                        box-sizing: border-box;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                    `;
+
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                            <div style="display: inline-flex; align-items: center; gap: 6px;">
+                                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${typeColor}; flex-shrink: 0;"></span>
+                                <span style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary);">${typeLabel}</span>
+                            </div>
+                            ${isSelected ? '<span style="font-size: 0.7rem; font-weight: 600; color: #4A90E2; background: rgba(74, 144, 226, 0.1); padding: 2px 8px; border-radius: 4px;">SELECTED</span>' : ''}
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px;">${formattedDate}</div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.8; word-break: break-all; padding-right: 8px; line-height: 1.4;">${backup.fileName}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">${sizeStr}</div>
+                        </div>
+                    `;
+
+                    card.addEventListener('click', () => {
+                        console.log('[RESTORE_UI] selected backup=' + backup.fileName);
+                        selectedBackupFileName = backup.fileName;
+                        renderBackups();
+                        const restoreBtn = document.getElementById('mobile-do-restore-btn');
+                        if (restoreBtn) {
+                            restoreBtn.disabled = false;
+                            restoreBtn.style.opacity = '1';
+                        }
+                    });
+
+                    container.appendChild(card);
+                });
+
+                const showMoreBtn = document.getElementById('show-more-backups-btn');
+                if (showMoreBtn) {
+                    showMoreBtn.style.display = backupsData.length > showingCount ? 'block' : 'none';
+                }
+            }
+
+            // Toggle panel open/closed
+            if (ui.style.display === 'none') {
+                selectedBackupFileName = null;
+                showingCount = 5;
+                if (window.AndroidBridge && typeof window.AndroidBridge.getAvailableBackups === 'function') {
+                    try {
+                        backupsData = JSON.parse(window.AndroidBridge.getAvailableBackups());
+                        console.log('[RESTORE_UI] loaded backups count=' + backupsData.length);
+                    } catch (e) {
+                        backupsData = [];
+                        console.error('[RESTORE_UI] error loading backups:', e);
                     }
                 }
-            }, 350);
+                const restoreBtn = document.getElementById('mobile-do-restore-btn');
+                if (restoreBtn) {
+                    restoreBtn.disabled = true;
+                    restoreBtn.style.opacity = '0.5';
+                }
+                renderBackups();
+                ui.style.display = 'block';
+                // Scroll the restore panel into view
+                setTimeout(() => ui.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+            } else {
+                ui.style.display = 'none';
+            }
         });
     }
 
-    // 4. Cleanup Old Records — placeholder (no backend API)
+    // 4. Cleanup Old Records — Lifecycle Manager cleanup
     const drawerCleanupBtn = document.getElementById('drawer-cleanup-btn');
     if (drawerCleanupBtn) {
         drawerCleanupBtn.addEventListener('click', () => {
-            showToast('Cleanup feature coming soon', 'info');
+            if (window.AndroidBridge && typeof window.AndroidBridge.runCleanup === 'function') {
+                try {
+                    const resultJson = window.AndroidBridge.runCleanup();
+                    const report = JSON.parse(resultJson);
+                    const msg = `Cleanup Complete\nRecovered ${report.storageRecovered || '0 B'}\nRemoved ${report.filesRemoved || 0} backups`;
+                    showToast(msg, 'success');
+                    // Change 5: immediately refresh Database Center metrics
+                    fetchDbStats();
+                    fetchLifecycleStats();
+                    refreshAvailableBackups();
+                } catch (e) {
+                    console.error('[LIFECYCLE] cleanup error:', e);
+                    showToast('Cleanup failed: ' + e.message, 'error');
+                }
+            } else {
+                showToast('Cleanup is only available on Android app', 'info');
+            }
         });
     }
 
@@ -551,22 +854,34 @@ async function updateDrawerStatus() {
         els.appVersion.innerText = 'v1.0';
     }
 
-    // Sync Status — from existing /backup/status API
     try {
-        const response = await fetch(`${BACKUP_BASE_URL}/status`);
-        if (response.ok) {
-            const status = await response.json();
+        if (window.AndroidBridge && typeof window.AndroidBridge.getSyncState === 'function') {
+            const statusJson = window.AndroidBridge.getSyncState();
+            const status = JSON.parse(statusJson);
 
             if (els.syncStatus) {
                 els.syncStatus.className = 'drawer-status-value drawer-sync-indicator';
                 if (status.status === 'Synced') {
                     els.syncStatus.innerText = '● Synced';
                     els.syncStatus.classList.add('sync-ok');
+                } else if (status.status === 'Syncing...') {
+                    els.syncStatus.innerText = '● Syncing...';
+                    els.syncStatus.style.color = '#2196f3'; // Blue
                 } else if (status.status === 'Pending Sync') {
-                    els.syncStatus.innerText = `● Pending (${status.transactionsSinceLast || 0}/10)`;
+                    els.syncStatus.innerText = `● Pending (${status.pendingQueue})`;
+                    els.syncStatus.classList.add('sync-pending'); // Yellow/Orange
+                } else if (status.status === 'Offline') {
+                    els.syncStatus.innerText = '● Offline';
                     els.syncStatus.classList.add('sync-pending');
+                } else if (status.status === 'Sign In Required') {
+                    els.syncStatus.innerText = '● Sign In Required';
+                    els.syncStatus.style.color = '#9e9e9e'; // Gray
+                } else if (status.hasError) {
+                    els.syncStatus.innerText = '● Error';
+                    els.syncStatus.classList.add('sync-error'); // Red
                 } else {
-                    els.syncStatus.innerText = status.status || 'Unknown';
+                    els.syncStatus.innerText = `● ${status.status}`;
+                    els.syncStatus.style.color = '#9e9e9e';
                 }
             }
         }
@@ -621,10 +936,30 @@ function formatMobileDate(dateStr) {
 // --- UI Feedback ---
 
 function showToast(message, type = 'success') {
+    console.log('[TOAST] showToast called');
+    console.log('[TOAST] raw message:', message);
+    console.log('[TOAST] message type:', typeof message);
+    console.log('[TOAST] message is null:', message === null);
+    console.log('[TOAST] message is undefined:', message === undefined);
+    console.log('[TOAST] message is empty string:', message === '');
+    console.log('[TOAST] toast type:', type);
+    console.log('[TOAST] toastContainer exists:', !!toastContainer);
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerHTML = `<span class="toast-msg">${message}</span>`;
+    console.log('[TOAST] toast innerHTML:', toast.innerHTML);
     toastContainer.appendChild(toast);
+    console.log('[TOAST] toast appended to container');
+    // Check computed styles
+    const toastStyles = window.getComputedStyle(toast);
+    const msgSpan = toast.querySelector('.toast-msg');
+    const msgStyles = msgSpan ? window.getComputedStyle(msgSpan) : null;
+    console.log('[TOAST] toast background-color:', toastStyles.backgroundColor);
+    console.log('[TOAST] toast color:', toastStyles.color);
+    console.log('[TOAST] .toast-msg color:', msgStyles ? msgStyles.color : 'NO SPAN');
+    console.log('[TOAST] .toast-msg innerText:', msgSpan ? msgSpan.innerText : 'NO SPAN');
+    console.log('[TOAST] toast offsetWidth:', toast.offsetWidth);
+    console.log('[TOAST] toast offsetHeight:', toast.offsetHeight);
     setTimeout(() => {
         toast.classList.add('toast-fade-out');
         setTimeout(() => toast.remove(), 300);
@@ -1111,12 +1446,12 @@ async function loadAnalyticsData() {
     if (loader) loader.classList.remove('hidden');
 
     try {
-        const response = await fetch(`${API_BASE_URL}/all`);
-        if (!response.ok) throw new Error('Failed to fetch analytics data');
-        const data = await response.json();
+        const raw = window.AndroidBridge.getAllTransactionsForAnalytics();
+        const data = JSON.parse(raw);
 
         processAnalyticsData(data);
     } catch (e) {
+        console.error('Analytics load error:', e);
         showToast('Failed to load analytics', 'error');
     } finally {
         if (loader) loader.classList.add('hidden');
@@ -1429,6 +1764,7 @@ function openDbCenter() {
 
     // Fetch live stats every time panel opens
     fetchDbStats();
+    fetchLifecycleStats();
     if (typeof window.refreshBackupMetrics === 'function') {
         window.refreshBackupMetrics();
     }
@@ -1436,16 +1772,28 @@ function openDbCenter() {
 }
 
 function refreshAvailableBackups() {
+    console.log('[RESTORE] refreshAvailableBackups called');
+    console.log('[RESTORE] AndroidBridge present:', !!window.AndroidBridge);
+    console.log('[RESTORE] getAvailableBackups present:', !!(window.AndroidBridge && typeof window.AndroidBridge.getAvailableBackups === 'function'));
+    console.log('[RESTORE] availableBackupsSelect element:', !!availableBackupsSelect);
     if (window.AndroidBridge && typeof window.AndroidBridge.getAvailableBackups === 'function') {
         try {
+            console.log('[RESTORE] requesting backups from AndroidBridge');
             const backupsJson = window.AndroidBridge.getAvailableBackups();
+            console.log('[RESTORE] raw backup payload:', backupsJson);
             const backups = JSON.parse(backupsJson);
+            console.log('[RESTORE] parsed backup payload:', JSON.stringify(backups));
+            console.log('[RESTORE] backup count:', backups.length);
 
-            if (!availableBackupsSelect) return;
+            if (!availableBackupsSelect) {
+                console.log('[RESTORE] DEAD END: availableBackupsSelect is null');
+                return;
+            }
 
             availableBackupsSelect.innerHTML = '';
 
             if (backups.length === 0) {
+                console.log('[RESTORE] no backups found, showing placeholder');
                 const opt = document.createElement('option');
                 opt.value = "";
                 opt.disabled = true;
@@ -1453,7 +1801,8 @@ function refreshAvailableBackups() {
                 opt.textContent = "No backups available";
                 availableBackupsSelect.appendChild(opt);
             } else {
-                backups.forEach(backup => {
+                backups.forEach((backup, i) => {
+                    console.log(`[RESTORE] backup[${i}]:`, backup.fileName, backup.backupType, backup.sizeBytes, 'bytes');
                     const opt = document.createElement('option');
                     opt.value = backup.fileName;
                     // Format timestamp
@@ -1461,11 +1810,13 @@ function refreshAvailableBackups() {
                     opt.textContent = `${backup.fileName} (${backup.backupType}, ${(backup.sizeBytes / 1024).toFixed(1)} KB) - ${date.toLocaleString()}`;
                     availableBackupsSelect.appendChild(opt);
                 });
+                console.log('[RESTORE] select populated with', backups.length, 'options');
             }
         } catch (e) {
-            console.error("Error fetching available backups", e);
+            console.error('[RESTORE] error fetching available backups:', e);
         }
     } else {
+        console.log('[RESTORE] no AndroidBridge, showing desktop placeholder');
         if (availableBackupsSelect) {
             availableBackupsSelect.innerHTML = '<option value="" disabled selected>Desktop Mode: Backups unavailable</option>';
         }
@@ -1496,7 +1847,12 @@ async function fetchDbStats() {
         dbSize:     document.getElementById('dbcenter-db-size'),
         lastBackup: document.getElementById('dbcenter-last-backup'),
         lastExport: document.getElementById('dbcenter-last-export'),
-        syncStatus: document.getElementById('dbcenter-sync-status'),
+        cloudStatus: document.getElementById('dbcenter-cloud-status'),
+        cloudConnection: document.getElementById('dbcenter-cloud-connection'),
+        cloudPending: document.getElementById('dbcenter-cloud-pending'),
+        cloudLastSync: document.getElementById('dbcenter-cloud-last-sync'),
+        cloudRecords: document.getElementById('dbcenter-cloud-records'),
+        cloudLocalRecords: document.getElementById('dbcenter-cloud-local-records')
     };
 
     try {
@@ -1513,13 +1869,11 @@ async function fetchDbStats() {
         }
 
         if (stats) {
-            // Total Transactions — REAL backend count
             if (els.totalTxns) {
                 const count = parseInt(stats.totalTransactions, 10) || 0;
                 els.totalTxns.innerText = count.toLocaleString();
             }
 
-            // Database Size — REAL file size from backend
             if (els.dbSize) {
                 const bytes = parseInt(stats.databaseSizeBytes, 10) || 0;
                 if (bytes >= 1048576) {
@@ -1531,34 +1885,69 @@ async function fetchDbStats() {
                 }
             }
 
-            // Last Backup
             if (els.lastBackup) {
                 els.lastBackup.innerText = stats.lastBackupTime || 'Never';
             }
+        }
 
-            // Sync Status
-            if (els.syncStatus) {
-                els.syncStatus.className = 'db-center-metric-value db-center-sync-badge';
-                if (stats.syncStatus === 'Synced') {
-                    els.syncStatus.innerText = '● Synced';
-                    els.syncStatus.classList.add('sync-ok');
-                } else if (stats.syncStatus === 'Pending Sync') {
-                    els.syncStatus.innerText = `● Pending (${stats.pendingMutations || 0}/10)`;
-                    els.syncStatus.classList.add('sync-pending');
+        if (window.AndroidBridge && typeof window.AndroidBridge.getSyncState === 'function') {
+            const syncStateStr = window.AndroidBridge.getSyncState();
+            const syncStatus = JSON.parse(syncStateStr);
+
+            if (els.cloudStatus) {
+                els.cloudStatus.className = 'db-center-sync-badge';
+                if (syncStatus.status === 'Synced') {
+                    els.cloudStatus.innerText = '🟢 Synced';
+                    els.cloudStatus.classList.add('sync-ok');
+                } else if (syncStatus.status === 'Syncing...') {
+                    els.cloudStatus.innerText = '🔵 Syncing...';
+                    els.cloudStatus.style.color = '#2196f3';
+                } else if (syncStatus.status === 'Pending Sync') {
+                    els.cloudStatus.innerText = `🟡 Pending (${syncStatus.pendingQueue})`;
+                    els.cloudStatus.classList.add('sync-pending');
+                } else if (syncStatus.status === 'Offline') {
+                    els.cloudStatus.innerText = '🟠 Offline';
+                    els.cloudStatus.classList.add('sync-pending');
+                } else if (syncStatus.status === 'Sign In Required') {
+                    els.cloudStatus.innerText = '⚪ Sign In Required';
+                    els.cloudStatus.style.color = '#9e9e9e';
+                } else if (syncStatus.hasError) {
+                    els.cloudStatus.innerText = '🔴 Error';
+                    els.cloudStatus.classList.add('sync-error');
                 } else {
-                    els.syncStatus.innerText = stats.syncStatus || 'Unknown';
+                    els.cloudStatus.innerText = `● ${syncStatus.status}`;
                 }
             }
+            if (els.cloudConnection) els.cloudConnection.innerText = syncStatus.connection || 'Unknown';
+            if (els.cloudPending) els.cloudPending.innerText = syncStatus.pendingQueue || '0';
+
+            if (els.cloudLastSync) {
+                if (syncStatus.lastSync > 0) {
+                    const diff = Math.floor((Date.now() - syncStatus.lastSync) / 1000);
+                    if (diff < 60) {
+                        els.cloudLastSync.innerText = `${diff} seconds ago`;
+                    } else if (diff < 3600) {
+                        els.cloudLastSync.innerText = `${Math.floor(diff / 60)} minutes ago`;
+                    } else {
+                        els.cloudLastSync.innerText = new Date(syncStatus.lastSync).toLocaleString();
+                    }
+                } else {
+                    els.cloudLastSync.innerText = 'Never';
+                }
+            }
+
+            if (els.cloudRecords) els.cloudRecords.innerText = syncStatus.cloudRecords || '0';
+            if (els.cloudLocalRecords) els.cloudLocalRecords.innerText = syncStatus.localRecords || '0';
         }
+
     } catch (e) {
         console.error("fetchDbStats error", e);
-        // Graceful fallback — panel still shows but with placeholder data
         if (els.totalTxns) els.totalTxns.innerText = 'Unavailable';
         if (els.dbSize) els.dbSize.innerText = 'Unavailable';
         if (els.lastBackup) els.lastBackup.innerText = 'Unavailable';
-        if (els.syncStatus) {
-            els.syncStatus.className = 'db-center-metric-value db-center-sync-badge sync-error';
-            els.syncStatus.innerText = '● Error';
+        if (els.cloudStatus) {
+            els.cloudStatus.className = 'db-center-metric-value db-center-sync-badge sync-error';
+            els.cloudStatus.innerText = '● Error';
         }
     }
 
@@ -1568,50 +1957,141 @@ async function fetchDbStats() {
     }
 }
 
+/**
+ * Fetches backup lifecycle statistics from AndroidBridge.getLifecycleStats().
+ * Populates the new DB Center metrics: total backups, storage, health, breakdown.
+ */
+function fetchLifecycleStats() {
+    const els = {
+        totalBackups:     document.getElementById('dbcenter-total-backups'),
+        backupStorage:    document.getElementById('dbcenter-backup-storage'),
+        backupHealth:     document.getElementById('dbcenter-backup-health'),
+        backupBreakdown:  document.getElementById('dbcenter-backup-breakdown'),
+    };
+
+    if (window.AndroidBridge && typeof window.AndroidBridge.getLifecycleStats === 'function') {
+        try {
+            const statsJson = window.AndroidBridge.getLifecycleStats();
+            const stats = JSON.parse(statsJson);
+
+            // Total Backups
+            if (els.totalBackups) {
+                els.totalBackups.innerText = (stats.totalBackups || 0).toLocaleString();
+            }
+
+            // Backup Storage
+            if (els.backupStorage) {
+                const bytes = parseInt(stats.totalBackupStorageBytes, 10) || 0;
+                if (bytes >= 1048576) {
+                    els.backupStorage.innerText = `${(bytes / 1048576).toFixed(1)} MB`;
+                } else if (bytes >= 1024) {
+                    els.backupStorage.innerText = `${(bytes / 1024).toFixed(0)} KB`;
+                } else {
+                    els.backupStorage.innerText = `${bytes} B`;
+                }
+            }
+
+            // Backup Health
+            if (els.backupHealth) {
+                els.backupHealth.className = 'db-center-metric-value db-center-health-badge';
+                const healthStatus = stats.healthStatus || 'neutral';
+                const healthLabel = stats.healthLabel || 'Unknown';
+                if (healthStatus === 'ok') {
+                    els.backupHealth.innerText = '● ' + healthLabel;
+                    els.backupHealth.classList.add('health-ok');
+                } else if (healthStatus === 'warning') {
+                    els.backupHealth.innerText = '● ' + healthLabel;
+                    els.backupHealth.classList.add('health-warning');
+                } else {
+                    els.backupHealth.innerText = healthLabel;
+                    els.backupHealth.classList.add('health-neutral');
+                }
+            }
+
+            // Breakdown: Auto / Manual / Emergency
+            if (els.backupBreakdown) {
+                const a = stats.autoBackupCount || 0;
+                const m = stats.manualBackupCount || 0;
+                const e = stats.emergencyBackupCount || 0;
+                els.backupBreakdown.innerText = `${a} / ${m} / ${e}`;
+            }
+        } catch (e) {
+            console.error('fetchLifecycleStats error', e);
+            if (els.totalBackups)    els.totalBackups.innerText = 'Unavailable';
+            if (els.backupStorage)   els.backupStorage.innerText = 'Unavailable';
+            if (els.backupHealth)    els.backupHealth.innerText = 'Unavailable';
+            if (els.backupBreakdown) els.backupBreakdown.innerText = 'Unavailable';
+        }
+    } else {
+        // Desktop mode — no lifecycle stats
+        if (els.totalBackups)    els.totalBackups.innerText = '—';
+        if (els.backupStorage)   els.backupStorage.innerText = '—';
+        if (els.backupHealth)    els.backupHealth.innerText = '—';
+        if (els.backupBreakdown) els.backupBreakdown.innerText = '—';
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // NEW MOBILE FORM INTERACTIONS
 // ═══════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
     // Restore Selected logic
+    console.log('[RESTORE] DOMContentLoaded: doRestoreSelectedBtn exists:', !!doRestoreSelectedBtn);
+    console.log('[RESTORE] DOMContentLoaded: availableBackupsSelect exists:', !!availableBackupsSelect);
     if (doRestoreSelectedBtn && availableBackupsSelect) {
+        console.log('[RESTORE] wiring up doRestoreSelectedBtn click handler');
         doRestoreSelectedBtn.addEventListener('click', () => {
+            console.log('[RESTORE] do-restore-selected-btn clicked');
             const selectedFileName = availableBackupsSelect.value;
+            console.log('[RESTORE] selected backup:', selectedFileName);
             if (!selectedFileName) {
+                console.log('[RESTORE] no backup selected, showing alert');
                 alert("Please select a backup to restore.");
                 return;
             }
 
             if (!confirm(`Restore selected backup (${selectedFileName})?\n\nCurrent database will be replaced.\nAn emergency backup will be created first.`)) {
+                console.log('[RESTORE] user cancelled confirm dialog');
                 return;
             }
 
+            console.log('[RESTORE] user confirmed, checking AndroidBridge');
             if (window.AndroidBridge && typeof window.AndroidBridge.restoreDatabase === 'function') {
                 try {
+                    console.log('[RESTORE] bridge entered, calling restoreDatabase:', selectedFileName);
                     doRestoreSelectedBtn.querySelector('.btn-loader').classList.remove('hidden');
                     doRestoreSelectedBtn.querySelector('.btn-text').textContent = 'Restoring...';
 
+                    console.log('[RESTORE] restore started');
                     const responseJson = window.AndroidBridge.restoreDatabase(selectedFileName);
+                    console.log('[RESTORE] raw restore response:', responseJson);
                     const response = JSON.parse(responseJson);
+                    console.log('[RESTORE] parsed restore response:', JSON.stringify(response));
 
                     if (response.status === 'success') {
+                        console.log('[RESTORE] restore completed successfully');
                         alert("Restore successful! App will now reload.");
                         window.location.reload();
                     } else {
+                        console.log('[RESTORE] restore failed:', response.message);
                         alert("Restore failed: " + (response.message || "Unknown error"));
                         doRestoreSelectedBtn.querySelector('.btn-loader').classList.add('hidden');
                         doRestoreSelectedBtn.querySelector('.btn-text').textContent = 'Restore Selected';
                     }
                 } catch (e) {
-                    console.error("Restore error", e);
+                    console.error('[RESTORE] restore exception:', e);
                     alert("Restore error: " + e.message);
                     doRestoreSelectedBtn.querySelector('.btn-loader').classList.add('hidden');
                     doRestoreSelectedBtn.querySelector('.btn-text').textContent = 'Restore Selected';
                 }
             } else {
+                console.log('[RESTORE] no AndroidBridge.restoreDatabase, showing alert');
                 alert("Restore is only available on Android app.");
             }
         });
+    } else {
+        console.log('[RESTORE] DEAD END: doRestoreSelectedBtn or availableBackupsSelect is null, restore click handler NOT wired');
     }
 
     // Segmented Toggle Logic

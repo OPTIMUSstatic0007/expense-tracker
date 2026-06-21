@@ -44,6 +44,19 @@ class SyncManager private constructor(
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
     val connectivityState: StateFlow<ConnectivityState> = connectivityMonitor.connectivityState
 
+    private val _lastSyncTime = MutableStateFlow(0L)
+    val lastSyncTime: StateFlow<Long> = _lastSyncTime.asStateFlow()
+
+    private val _localRecordsCount = MutableStateFlow(0)
+    val localRecordsCount: StateFlow<Int> = _localRecordsCount.asStateFlow()
+
+    private val _cloudRecordsCount = MutableStateFlow(0)
+    val cloudRecordsCount: StateFlow<Int> = _cloudRecordsCount.asStateFlow()
+
+    private val _pendingQueueCount = MutableStateFlow(0)
+    val pendingQueueCount: StateFlow<Int> = _pendingQueueCount.asStateFlow()
+
+
     private var initializedUid: String? = null
     private val managerJob = SupervisorJob()
     private val managerScope = CoroutineScope(managerJob + Dispatchers.IO)
@@ -86,6 +99,18 @@ class SyncManager private constructor(
         observeConnectivity()
         attachRealtimeListener()
         requestQueueRestore()
+
+        managerScope.launch {
+            try {
+                localRepository?.let { repo ->
+                    _localRecordsCount.value = repo.getTransactionCount()
+                }
+                _cloudRecordsCount.value = cloudFirestoreRepository.getTransactionCount()
+            } catch (e: Exception) {
+                SyncLogger.warning("Failed to fetch initial record counts", e)
+            }
+        }
+
         requestUploadDrain()
         requestDownload()
         schedulePeriodicBackgroundSync()
@@ -210,6 +235,7 @@ class SyncManager private constructor(
         )
 
         pendingSyncRepository.insert(pendingOperation)
+        _pendingQueueCount.value = _pendingQueueCount.value + 1
         requestUploadDrain()
         triggerOneTimeBackgroundSync()
     }
@@ -235,6 +261,7 @@ class SyncManager private constructor(
         managerScope.launch {
             val uid = initializedUid ?: return@launch
             val pendingCount = pendingSyncRepository.countPending(uid)
+            _pendingQueueCount.value = pendingCount
             if (pendingCount > 0) {
                 SyncLogger.info("Queue restored: pending=$pendingCount")
             }
@@ -245,6 +272,7 @@ class SyncManager private constructor(
         managerScope.launch {
             val uid = initializedUid ?: return@launch
             val pendingCount = pendingSyncRepository.countPending(uid)
+            _pendingQueueCount.value = pendingCount
             if (pendingCount > 0) {
                 SyncLogger.info("Queue resumed: pending=$pendingCount")
             }
@@ -399,6 +427,7 @@ class SyncManager private constructor(
         )
         if (inserted) {
             SyncLogger.info("Realtime ADDED transactionId=${transaction.id}")
+            _localRecordsCount.value = repository.getTransactionCount()
         }
     }
 
@@ -417,6 +446,7 @@ class SyncManager private constructor(
                 logConflictDecision("Realtime MODIFIED", existing, transaction, decision)
                 repository.updateTransactionFromCloud(CloudTransactionMapper.toEntity(transaction))
                 SyncLogger.info("Realtime MODIFIED transactionId=${transaction.id}")
+                _localRecordsCount.value = repository.getTransactionCount()
             }
 
             ConflictResolver.Decision.USE_LOCAL,
@@ -447,6 +477,7 @@ class SyncManager private constructor(
                     version = transaction.version
                 )
                 SyncLogger.info("Realtime REMOVED transactionId=${transaction.id}")
+                _localRecordsCount.value = repository.getTransactionCount()
             }
 
             ConflictResolver.Decision.USE_LOCAL,
@@ -516,6 +547,9 @@ class SyncManager private constructor(
                     "Download complete: localCount=$localCount cloudCount=${cloudTransactions.size} insertedCount=$insertedCount updatedCount=$updatedCount skippedCount=$skippedCount"
                 )
                 _syncState.value = SyncState.Idle
+                _lastSyncTime.value = System.currentTimeMillis()
+                _localRecordsCount.value = repository.getTransactionCount()
+                _cloudRecordsCount.value = cloudTransactions.size
             } catch (exception: Exception) {
                 _syncState.value = SyncState.Error("Download failed")
                 SyncLogger.error("Download failed", exception)
