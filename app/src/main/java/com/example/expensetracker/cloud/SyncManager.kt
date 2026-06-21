@@ -6,6 +6,7 @@ import com.example.expensetracker.local.TransactionEntity
 import com.example.expensetracker.repository.LocalRepository
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.FirebaseFirestoreException
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -652,6 +653,24 @@ class SyncManager private constructor(
                     }
                 }
                 return true
+            } catch (exception: FirebaseFirestoreException) {
+                if (exception.code == FirebaseFirestoreException.Code.UNAVAILABLE) {
+                    SyncLogger.info("Upload failed due to offline state. Operation preserved for next sync.")
+                    return false
+                } else {
+                    currentOperation = pendingSyncRepository.markFailed(currentOperation)
+                    logUploadFailure(currentOperation, exception)
+
+                    if (currentOperation.status == PendingSyncOperation.Status.FAILED) {
+                        _syncState.value = SyncState.Error("Upload failed after max retries")
+                        return false
+                    }
+
+                    SyncLogger.info(
+                        "Retry: operation=${currentOperation.operationType.name} transactionId=${currentOperation.transactionId} retryCount=${currentOperation.retryCount}"
+                    )
+                    delay(FirestoreConstants.SYNC_RETRY_INITIAL_DELAY_MS * currentOperation.retryCount)
+                }
             } catch (exception: Exception) {
                 currentOperation = pendingSyncRepository.markFailed(currentOperation)
                 logUploadFailure(currentOperation, exception)
