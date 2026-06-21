@@ -110,8 +110,8 @@ class SyncManager private constructor(
             .setConstraints(constraints)
             .setBackoffCriteria(
                 BackoffPolicy.EXPONENTIAL,
-                WorkManager.MIN_BACKOFF_MILLIS,
-                TimeUnit.MILLISECONDS
+                30,
+                TimeUnit.SECONDS
             )
             .build()
 
@@ -133,8 +133,8 @@ class SyncManager private constructor(
             .setConstraints(constraints)
             .setBackoffCriteria(
                 BackoffPolicy.EXPONENTIAL,
-                WorkManager.MIN_BACKOFF_MILLIS,
-                TimeUnit.MILLISECONDS
+                30,
+                TimeUnit.SECONDS
             )
             .build()
 
