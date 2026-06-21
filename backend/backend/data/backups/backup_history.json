@@ -1,8 +1,57 @@
 [
     {
-        "filename": "ledger_backup_2026_06_11_14_29_09.db",
+        "filename": "ledger_backup_2026_06_21_12_55_13.db",
         "type": "auto",
-        "timestamp": "2026-06-11T14:29:09.819767307",
+        "timestamp": "2026-06-21T12:55:13",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_21_13_25_12.db",
+        "type": "auto",
+        "timestamp": "2026-06-21T13:25:12",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_21_13_39_42.db",
+        "type": "auto",
+        "timestamp": "2026-06-21T13:39:42",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_21_13_50_18.db",
+        "type": "auto",
+        "timestamp": "2026-06-21T13:50:18",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_21_13_58_05.db",
+        "type": "auto",
+        "timestamp": "2026-06-21T13:58:05",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_21_14_02_18.db",
+        "type": "auto",
+        "timestamp": "2026-06-21T14:02:18",
+        "transactionCount": 0,
+        "balanceAtBackup": "Unknown"
+    },
+    {
+        "filename": "ledger_backup_2026_06_21_18_02_14.db",
+        "type": "auto",
+        "timestamp": "2026-06-21T18:02:14.472646284",
+        "transactionCount": 0,
+        "balanceAtBackup": "0.00"
+    },
+    {
+        "filename": "ledger_backup_2026_06_21_18_15_38.db",
+        "type": "auto",
+        "timestamp": "2026-06-21T18:15:38.409999760",
         "transactionCount": 0,
         "balanceAtBackup": "0.00"
     }

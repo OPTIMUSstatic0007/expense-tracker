@@ -854,22 +854,34 @@ async function updateDrawerStatus() {
         els.appVersion.innerText = 'v1.0';
     }
 
-    // Sync Status — from existing /backup/status API
     try {
-        const response = await fetch(`${BACKUP_BASE_URL}/status`);
-        if (response.ok) {
-            const status = await response.json();
+        if (window.AndroidBridge && typeof window.AndroidBridge.getSyncState === 'function') {
+            const statusJson = window.AndroidBridge.getSyncState();
+            const status = JSON.parse(statusJson);
 
             if (els.syncStatus) {
                 els.syncStatus.className = 'drawer-status-value drawer-sync-indicator';
                 if (status.status === 'Synced') {
                     els.syncStatus.innerText = '● Synced';
                     els.syncStatus.classList.add('sync-ok');
+                } else if (status.status === 'Syncing...') {
+                    els.syncStatus.innerText = '● Syncing...';
+                    els.syncStatus.style.color = '#2196f3'; // Blue
                 } else if (status.status === 'Pending Sync') {
-                    els.syncStatus.innerText = `● Pending (${status.transactionsSinceLast || 0}/10)`;
+                    els.syncStatus.innerText = `● Pending (${status.pendingQueue})`;
+                    els.syncStatus.classList.add('sync-pending'); // Yellow/Orange
+                } else if (status.status === 'Offline') {
+                    els.syncStatus.innerText = '● Offline';
                     els.syncStatus.classList.add('sync-pending');
+                } else if (status.status === 'Sign In Required') {
+                    els.syncStatus.innerText = '● Sign In Required';
+                    els.syncStatus.style.color = '#9e9e9e'; // Gray
+                } else if (status.hasError) {
+                    els.syncStatus.innerText = '● Error';
+                    els.syncStatus.classList.add('sync-error'); // Red
                 } else {
-                    els.syncStatus.innerText = status.status || 'Unknown';
+                    els.syncStatus.innerText = `● ${status.status}`;
+                    els.syncStatus.style.color = '#9e9e9e';
                 }
             }
         }
@@ -1835,7 +1847,12 @@ async function fetchDbStats() {
         dbSize:     document.getElementById('dbcenter-db-size'),
         lastBackup: document.getElementById('dbcenter-last-backup'),
         lastExport: document.getElementById('dbcenter-last-export'),
-        syncStatus: document.getElementById('dbcenter-sync-status'),
+        cloudStatus: document.getElementById('dbcenter-cloud-status'),
+        cloudConnection: document.getElementById('dbcenter-cloud-connection'),
+        cloudPending: document.getElementById('dbcenter-cloud-pending'),
+        cloudLastSync: document.getElementById('dbcenter-cloud-last-sync'),
+        cloudRecords: document.getElementById('dbcenter-cloud-records'),
+        cloudLocalRecords: document.getElementById('dbcenter-cloud-local-records')
     };
 
     try {
@@ -1852,13 +1869,11 @@ async function fetchDbStats() {
         }
 
         if (stats) {
-            // Total Transactions — REAL backend count
             if (els.totalTxns) {
                 const count = parseInt(stats.totalTransactions, 10) || 0;
                 els.totalTxns.innerText = count.toLocaleString();
             }
 
-            // Database Size — REAL file size from backend
             if (els.dbSize) {
                 const bytes = parseInt(stats.databaseSizeBytes, 10) || 0;
                 if (bytes >= 1048576) {
@@ -1870,34 +1885,69 @@ async function fetchDbStats() {
                 }
             }
 
-            // Last Backup
             if (els.lastBackup) {
                 els.lastBackup.innerText = stats.lastBackupTime || 'Never';
             }
+        }
 
-            // Sync Status
-            if (els.syncStatus) {
-                els.syncStatus.className = 'db-center-metric-value db-center-sync-badge';
-                if (stats.syncStatus === 'Synced') {
-                    els.syncStatus.innerText = '● Synced';
-                    els.syncStatus.classList.add('sync-ok');
-                } else if (stats.syncStatus === 'Pending Sync') {
-                    els.syncStatus.innerText = `● Pending (${stats.pendingMutations || 0}/10)`;
-                    els.syncStatus.classList.add('sync-pending');
+        if (window.AndroidBridge && typeof window.AndroidBridge.getSyncState === 'function') {
+            const syncStateStr = window.AndroidBridge.getSyncState();
+            const syncStatus = JSON.parse(syncStateStr);
+
+            if (els.cloudStatus) {
+                els.cloudStatus.className = 'db-center-sync-badge';
+                if (syncStatus.status === 'Synced') {
+                    els.cloudStatus.innerText = '🟢 Synced';
+                    els.cloudStatus.classList.add('sync-ok');
+                } else if (syncStatus.status === 'Syncing...') {
+                    els.cloudStatus.innerText = '🔵 Syncing...';
+                    els.cloudStatus.style.color = '#2196f3';
+                } else if (syncStatus.status === 'Pending Sync') {
+                    els.cloudStatus.innerText = `🟡 Pending (${syncStatus.pendingQueue})`;
+                    els.cloudStatus.classList.add('sync-pending');
+                } else if (syncStatus.status === 'Offline') {
+                    els.cloudStatus.innerText = '🟠 Offline';
+                    els.cloudStatus.classList.add('sync-pending');
+                } else if (syncStatus.status === 'Sign In Required') {
+                    els.cloudStatus.innerText = '⚪ Sign In Required';
+                    els.cloudStatus.style.color = '#9e9e9e';
+                } else if (syncStatus.hasError) {
+                    els.cloudStatus.innerText = '🔴 Error';
+                    els.cloudStatus.classList.add('sync-error');
                 } else {
-                    els.syncStatus.innerText = stats.syncStatus || 'Unknown';
+                    els.cloudStatus.innerText = `● ${syncStatus.status}`;
                 }
             }
+            if (els.cloudConnection) els.cloudConnection.innerText = syncStatus.connection || 'Unknown';
+            if (els.cloudPending) els.cloudPending.innerText = syncStatus.pendingQueue || '0';
+
+            if (els.cloudLastSync) {
+                if (syncStatus.lastSync > 0) {
+                    const diff = Math.floor((Date.now() - syncStatus.lastSync) / 1000);
+                    if (diff < 60) {
+                        els.cloudLastSync.innerText = `${diff} seconds ago`;
+                    } else if (diff < 3600) {
+                        els.cloudLastSync.innerText = `${Math.floor(diff / 60)} minutes ago`;
+                    } else {
+                        els.cloudLastSync.innerText = new Date(syncStatus.lastSync).toLocaleString();
+                    }
+                } else {
+                    els.cloudLastSync.innerText = 'Never';
+                }
+            }
+
+            if (els.cloudRecords) els.cloudRecords.innerText = syncStatus.cloudRecords || '0';
+            if (els.cloudLocalRecords) els.cloudLocalRecords.innerText = syncStatus.localRecords || '0';
         }
+
     } catch (e) {
         console.error("fetchDbStats error", e);
-        // Graceful fallback — panel still shows but with placeholder data
         if (els.totalTxns) els.totalTxns.innerText = 'Unavailable';
         if (els.dbSize) els.dbSize.innerText = 'Unavailable';
         if (els.lastBackup) els.lastBackup.innerText = 'Unavailable';
-        if (els.syncStatus) {
-            els.syncStatus.className = 'db-center-metric-value db-center-sync-badge sync-error';
-            els.syncStatus.innerText = '● Error';
+        if (els.cloudStatus) {
+            els.cloudStatus.className = 'db-center-metric-value db-center-sync-badge sync-error';
+            els.cloudStatus.innerText = '● Error';
         }
     }
 
