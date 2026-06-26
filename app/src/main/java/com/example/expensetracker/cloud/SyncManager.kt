@@ -613,6 +613,7 @@ class SyncManager private constructor(
 
                 val completedOperation = pendingSyncRepository.markCompleted(nextOperation)
                 pendingSyncRepository.delete(completedOperation)
+                _pendingQueueCount.value = maxOf(0, _pendingQueueCount.value - 1)
                 SyncLogger.info(
                     "Upload succeeded: operation=${nextOperation.operationType.name} transactionId=${nextOperation.transactionId}"
                 )

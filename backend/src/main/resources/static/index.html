@@ -58,11 +58,6 @@
                     <div class="drawer-status-row">
                         <span class="drawer-status-label">Sync Status</span>
                         <span class="drawer-status-value drawer-sync-indicator" id="drawer-sync-status">—</span>
-                    </div>
-                    <div class="drawer-status-row">
-                        <span class="drawer-status-label">App Version</span>
-                        <span class="drawer-status-value" id="drawer-app-version">v1.0</span>
-                    </div>
                 </div>
             </div>
             <!-- ANALYTICS Section -->
@@ -77,13 +72,17 @@
                 </button>
             </div>
 
-            <!-- FUTURE Section — placeholders -->
+            <!-- ACCOUNT Section -->
             <div class="nav-drawer-section">
                 <div class="nav-drawer-section-title">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-                    Future
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    Account
                 </div>
-                                <button id="theme-toggle-btn" class="nav-drawer-item nav-drawer-link-btn">
+                <button id="drawer-settings-link" class="nav-drawer-item nav-drawer-link-btn">
+                    <span>Settings</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+                <button id="theme-toggle-btn" class="nav-drawer-item nav-drawer-link-btn">
                     <span>Theme</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="5"></circle>
@@ -217,6 +216,15 @@
                         <span class="db-center-action-desc">Remove outdated entries</span>
                     </div>
                 </button>
+                <button id="dbcenter-sync-now-btn" class="db-center-action-btn">
+                    <div class="db-center-action-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path></svg>
+                    </div>
+                    <div class="db-center-action-content">
+                        <span class="db-center-action-text">Sync Now</span>
+                        <span class="db-center-action-desc">Trigger manual cloud sync</span>
+                    </div>
+                </button>
             </div>
             <!-- SECTION 2 — Database Metrics -->
             <div class="db-center-card">
@@ -237,6 +245,18 @@
                     <div class="db-center-metric">
                         <span class="db-center-metric-label">Total Backups</span>
                         <span class="db-center-metric-value" id="dbcenter-total-backups">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Backup Storage</span>
+                        <span class="db-center-metric-value" id="dbcenter-backup-storage">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Backup Health</span>
+                        <span class="db-center-metric-value db-center-health-badge" id="dbcenter-backup-health">—</span>
+                    </div>
+                    <div class="db-center-metric">
+                        <span class="db-center-metric-label">Auto / Manual / Emergency</span>
+                        <span class="db-center-metric-value" id="dbcenter-backup-breakdown">—</span>
                     </div>
                     <div class="db-center-metric">
                         <span class="db-center-metric-label">Last Export</span>

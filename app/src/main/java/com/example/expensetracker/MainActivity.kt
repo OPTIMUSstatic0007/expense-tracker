@@ -72,6 +72,7 @@ import com.example.expensetracker.bridge.AndroidBridge
 import com.example.expensetracker.backup.BackupLifecycleManager
 import kotlin.concurrent.thread
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 
 class MainActivity : ComponentActivity() {
 
@@ -450,6 +451,80 @@ fun ExpenseTrackerWebView(
             repository.getAllTransactions().collectLatest {
                 webViewInstance?.evaluateJavascript(
                     "if(typeof loadTransactions==='function'){currentPage=1;loadTransactions(false);}",
+                    null
+                )
+            }
+        }
+
+        // Sprint 8: Push live sync state updates to the WebView whenever
+        // syncState, connectivityState, or pendingQueueCount changes.
+        // This makes the hamburger and Database Center sync status reactive.
+        LaunchedEffect(syncManager, webViewInstance) {
+            if (syncManager == null || webViewInstance == null) return@LaunchedEffect
+            val sm = syncManager!!
+            combine(
+                sm.syncState,
+                sm.connectivityState,
+                sm.pendingQueueCount
+            ) { syncState, connectivity, pendingCount ->
+                Triple(syncState, connectivity, pendingCount)
+            }.collectLatest { (syncState, connectivity, pendingCount) ->
+                var status = "Unknown"
+                var isSyncing = false
+                var hasError = false
+                var errorMessage: String? = null
+
+                when (syncState) {
+                    is com.example.expensetracker.cloud.SyncState.Idle -> {
+                        status = "Synced"
+                    }
+                    is com.example.expensetracker.cloud.SyncState.Syncing -> {
+                        status = "Syncing..."
+                        isSyncing = true
+                    }
+                    is com.example.expensetracker.cloud.SyncState.Error -> {
+                        status = "Error"
+                        hasError = true
+                        errorMessage = syncState.message
+                    }
+                    is com.example.expensetracker.cloud.SyncState.Disabled -> {
+                        status = "Sign In Required"
+                    }
+                }
+
+                val connectionStatus = when (connectivity) {
+                    is com.example.expensetracker.cloud.ConnectivityState.Online -> "Online"
+                    is com.example.expensetracker.cloud.ConnectivityState.Offline -> "Offline"
+                    else -> "Unknown"
+                }
+
+                if (connectivity is com.example.expensetracker.cloud.ConnectivityState.Offline) {
+                    status = "Offline"
+                } else if (pendingCount > 0 && !isSyncing) {
+                    status = "Pending Sync"
+                }
+
+                val lastSync = sm.lastSyncTime.value
+                val localRecords = sm.localRecordsCount.value
+                val cloudRecords = sm.cloudRecordsCount.value
+
+                // Build JSON matching AndroidBridge.getSyncState() shape
+                val json = org.json.JSONObject().apply {
+                    put("status", status)
+                    put("connection", connectionStatus)
+                    put("pendingQueue", pendingCount)
+                    put("isSyncing", isSyncing)
+                    put("lastSync", lastSync)
+                    put("localRecords", localRecords)
+                    put("cloudRecords", cloudRecords)
+                    put("hasError", hasError)
+                    put("errorMessage", errorMessage ?: org.json.JSONObject.NULL)
+                }.toString()
+
+                // Escape single quotes in JSON for JS string literal safety
+                val escapedJson = json.replace("'", "\\'")
+                webViewInstance?.evaluateJavascript(
+                    "if(typeof onSyncStateChanged==='function'){onSyncStateChanged('$escapedJson');}",
                     null
                 )
             }
