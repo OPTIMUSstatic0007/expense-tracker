@@ -71,6 +71,8 @@ import com.example.expensetracker.repository.LocalRepository
 import com.example.expensetracker.bridge.AndroidBridge
 import com.example.expensetracker.backup.BackupLifecycleManager
 import kotlin.concurrent.thread
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 
@@ -459,16 +461,19 @@ fun ExpenseTrackerWebView(
         // Sprint 8: Push live sync state updates to the WebView whenever
         // syncState, connectivityState, or pendingQueueCount changes.
         // This makes the hamburger and Database Center sync status reactive.
+        // IMPORTANT: Uses `collect` (not `collectLatest`) so rapid state
+        // transitions (Syncing→Pending(1)→Syncing→Synced) are never cancelled.
         LaunchedEffect(syncManager, webViewInstance) {
             if (syncManager == null || webViewInstance == null) return@LaunchedEffect
             val sm = syncManager!!
+            val wv = webViewInstance!!
             combine(
                 sm.syncState,
                 sm.connectivityState,
                 sm.pendingQueueCount
             ) { syncState, connectivity, pendingCount ->
                 Triple(syncState, connectivity, pendingCount)
-            }.collectLatest { (syncState, connectivity, pendingCount) ->
+            }.collect { (syncState, connectivity, pendingCount) ->
                 var status = "Unknown"
                 var isSyncing = false
                 var hasError = false
@@ -523,10 +528,13 @@ fun ExpenseTrackerWebView(
 
                 // Escape single quotes in JSON for JS string literal safety
                 val escapedJson = json.replace("'", "\\'")
-                webViewInstance?.evaluateJavascript(
-                    "if(typeof onSyncStateChanged==='function'){onSyncStateChanged('$escapedJson');}",
-                    null
-                )
+                // evaluateJavascript MUST run on the main thread
+                withContext(Dispatchers.Main) {
+                    wv.evaluateJavascript(
+                        "if(typeof onSyncStateChanged==='function'){onSyncStateChanged('$escapedJson');}",
+                        null
+                    )
+                }
             }
         }
 

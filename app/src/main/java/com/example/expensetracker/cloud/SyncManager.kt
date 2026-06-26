@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -580,6 +581,8 @@ class SyncManager private constructor(
 
                 val nextOperation = pendingSyncRepository.getNextPending(uid) ?: run {
                     _syncState.value = SyncState.Idle
+                    _lastSyncTime.value = System.currentTimeMillis()
+                    yield() // Allow StateFlow collectors to observe the Idle state
                     SyncLogger.info("Queue empty")
                     return
                 }
@@ -606,6 +609,7 @@ class SyncManager private constructor(
                 }
 
                 _syncState.value = SyncState.Syncing
+                yield() // Allow StateFlow collectors to observe Syncing before upload
                 val completed = uploadWithRetry(nextOperation, transaction, repository)
                 if (!completed) {
                     return
@@ -614,6 +618,7 @@ class SyncManager private constructor(
                 val completedOperation = pendingSyncRepository.markCompleted(nextOperation)
                 pendingSyncRepository.delete(completedOperation)
                 _pendingQueueCount.value = maxOf(0, _pendingQueueCount.value - 1)
+                yield() // Allow StateFlow collectors to observe the updated count
                 SyncLogger.info(
                     "Upload succeeded: operation=${nextOperation.operationType.name} transactionId=${nextOperation.transactionId}"
                 )
