@@ -1991,7 +1991,7 @@ body {
         flex: 1;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        padding: 20px 16px;
+        padding: 20px 16px 80px;
         display: flex;
         flex-direction: column;
         gap: 16px;
