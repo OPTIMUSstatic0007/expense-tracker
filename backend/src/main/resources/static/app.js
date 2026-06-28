@@ -1822,6 +1822,11 @@ function openDbCenter() {
     const scrim = document.getElementById('db-center-scrim');
     if (!panel) return;
 
+    // Lock body scroll so the main dashboard doesn't scroll behind the panel
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+
     panel.classList.add('is-open');
     panel.setAttribute('aria-hidden', 'false');
     if (scrim) {
@@ -1901,6 +1906,11 @@ function closeDbCenter() {
         scrim.classList.remove('is-visible');
         scrim.setAttribute('aria-hidden', 'true');
     }
+
+    // Restore body scroll
+    document.body.style.overflow = '';
+    document.body.style.position = '';
+    document.body.style.width = '';
 }
 
 /**

@@ -458,82 +458,82 @@ fun ExpenseTrackerWebView(
             }
         }
 
-        // Sprint 8: Push live sync state updates to the WebView whenever
-        // syncState, connectivityState, or pendingQueueCount changes.
-        // This makes the hamburger and Database Center sync status reactive.
-        // IMPORTANT: Uses `collect` (not `collectLatest`) so rapid state
-        // transitions (Syncing→Pending(1)→Syncing→Synced) are never cancelled.
-        LaunchedEffect(syncManager, webViewInstance) {
-            if (syncManager == null || webViewInstance == null) return@LaunchedEffect
-            val sm = syncManager!!
-            val wv = webViewInstance!!
-            combine(
-                sm.syncState,
-                sm.connectivityState,
-                sm.pendingQueueCount
-            ) { syncState, connectivity, pendingCount ->
-                Triple(syncState, connectivity, pendingCount)
-            }.collect { (syncState, connectivity, pendingCount) ->
-                var status = "Unknown"
-                var isSyncing = false
-                var hasError = false
-                var errorMessage: String? = null
+        // Sprint 8: Direct callback for lightning-fast sync status UI.
+        // SyncManager.notifyStateChanged() fires this lambda immediately
+        // after every state mutation (Syncing, pendingCount change, Idle,
+        // connectivity change) — no StateFlow conflation, no combine delay.
+        DisposableEffect(syncManager, webViewInstance) {
+            if (syncManager == null || webViewInstance == null) {
+                onDispose { }
+            } else {
+                val sm = syncManager!!
+                val wv = webViewInstance!!
+                val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
-                when (syncState) {
-                    is com.example.expensetracker.cloud.SyncState.Idle -> {
-                        status = "Synced"
+                sm.setOnStateChangedListener { syncState, connectivity, pendingCount ->
+                    var status = "Unknown"
+                    var isSyncing = false
+                    var hasError = false
+                    var errorMessage: String? = null
+
+                    when (syncState) {
+                        is com.example.expensetracker.cloud.SyncState.Idle -> {
+                            status = "Synced"
+                        }
+                        is com.example.expensetracker.cloud.SyncState.Syncing -> {
+                            status = "Syncing..."
+                            isSyncing = true
+                        }
+                        is com.example.expensetracker.cloud.SyncState.Error -> {
+                            status = "Error"
+                            hasError = true
+                            errorMessage = syncState.message
+                        }
+                        is com.example.expensetracker.cloud.SyncState.Disabled -> {
+                            status = "Sign In Required"
+                        }
                     }
-                    is com.example.expensetracker.cloud.SyncState.Syncing -> {
-                        status = "Syncing..."
-                        isSyncing = true
+
+                    val connectionStatus = when (connectivity) {
+                        is com.example.expensetracker.cloud.ConnectivityState.Online -> "Online"
+                        is com.example.expensetracker.cloud.ConnectivityState.Offline -> "Offline"
+                        else -> "Unknown"
                     }
-                    is com.example.expensetracker.cloud.SyncState.Error -> {
-                        status = "Error"
-                        hasError = true
-                        errorMessage = syncState.message
+
+                    if (connectivity is com.example.expensetracker.cloud.ConnectivityState.Offline) {
+                        status = "Offline"
+                    } else if (pendingCount > 0 && !isSyncing) {
+                        status = "Pending Sync"
                     }
-                    is com.example.expensetracker.cloud.SyncState.Disabled -> {
-                        status = "Sign In Required"
+
+                    val lastSync = sm.lastSyncTime.value
+                    val localRecords = sm.localRecordsCount.value
+                    val cloudRecords = sm.cloudRecordsCount.value
+
+                    val json = org.json.JSONObject().apply {
+                        put("status", status)
+                        put("connection", connectionStatus)
+                        put("pendingQueue", pendingCount)
+                        put("isSyncing", isSyncing)
+                        put("lastSync", lastSync)
+                        put("localRecords", localRecords)
+                        put("cloudRecords", cloudRecords)
+                        put("hasError", hasError)
+                        put("errorMessage", errorMessage ?: org.json.JSONObject.NULL)
+                    }.toString()
+
+                    val escapedJson = json.replace("'", "\\'")
+                    // Post to main thread for evaluateJavascript
+                    mainHandler.post {
+                        wv.evaluateJavascript(
+                            "if(typeof onSyncStateChanged==='function'){onSyncStateChanged('$escapedJson');}",
+                            null
+                        )
                     }
                 }
 
-                val connectionStatus = when (connectivity) {
-                    is com.example.expensetracker.cloud.ConnectivityState.Online -> "Online"
-                    is com.example.expensetracker.cloud.ConnectivityState.Offline -> "Offline"
-                    else -> "Unknown"
-                }
-
-                if (connectivity is com.example.expensetracker.cloud.ConnectivityState.Offline) {
-                    status = "Offline"
-                } else if (pendingCount > 0 && !isSyncing) {
-                    status = "Pending Sync"
-                }
-
-                val lastSync = sm.lastSyncTime.value
-                val localRecords = sm.localRecordsCount.value
-                val cloudRecords = sm.cloudRecordsCount.value
-
-                // Build JSON matching AndroidBridge.getSyncState() shape
-                val json = org.json.JSONObject().apply {
-                    put("status", status)
-                    put("connection", connectionStatus)
-                    put("pendingQueue", pendingCount)
-                    put("isSyncing", isSyncing)
-                    put("lastSync", lastSync)
-                    put("localRecords", localRecords)
-                    put("cloudRecords", cloudRecords)
-                    put("hasError", hasError)
-                    put("errorMessage", errorMessage ?: org.json.JSONObject.NULL)
-                }.toString()
-
-                // Escape single quotes in JSON for JS string literal safety
-                val escapedJson = json.replace("'", "\\'")
-                // evaluateJavascript MUST run on the main thread
-                withContext(Dispatchers.Main) {
-                    wv.evaluateJavascript(
-                        "if(typeof onSyncStateChanged==='function'){onSyncStateChanged('$escapedJson');}",
-                        null
-                    )
+                onDispose {
+                    sm.setOnStateChangedListener(null)
                 }
             }
         }

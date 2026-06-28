@@ -57,6 +57,34 @@ class SyncManager private constructor(
     private val _pendingQueueCount = MutableStateFlow(0)
     val pendingQueueCount: StateFlow<Int> = _pendingQueueCount.asStateFlow()
 
+    /**
+     * Direct callback for lightning-fast UI updates.
+     * Fires immediately after every state mutation, bypassing StateFlow
+     * conflation so that the UI sees every intermediate transition
+     * (Pending→Syncing→Pending(1)→Syncing→Synced) without delay.
+     */
+    private var onStateChangedListener: ((SyncState, ConnectivityState, Int) -> Unit)? = null
+
+    fun setOnStateChangedListener(listener: ((SyncState, ConnectivityState, Int) -> Unit)?) {
+        onStateChangedListener = listener
+        // Fire immediately with current state so the UI is up-to-date
+        if (listener != null) {
+            listener.invoke(
+                _syncState.value,
+                connectivityMonitor.connectivityState.value,
+                _pendingQueueCount.value
+            )
+        }
+    }
+
+    /** Notify the listener with the current state snapshot. */
+    private fun notifyStateChanged() {
+        onStateChangedListener?.invoke(
+            _syncState.value,
+            connectivityMonitor.connectivityState.value,
+            _pendingQueueCount.value
+        )
+    }
 
     private var initializedUid: String? = null
     private val managerJob = SupervisorJob()
@@ -237,6 +265,7 @@ class SyncManager private constructor(
 
         pendingSyncRepository.insert(pendingOperation)
         _pendingQueueCount.value = _pendingQueueCount.value + 1
+        notifyStateChanged()
         requestUploadDrain()
         triggerOneTimeBackgroundSync()
     }
@@ -248,6 +277,8 @@ class SyncManager private constructor(
 
         connectivityJob = managerScope.launch {
             connectivityMonitor.connectivityState.collectLatest { state ->
+                // Notify immediately on every connectivity change for instant UI update
+                notifyStateChanged()
                 if (state is ConnectivityState.Online) {
                     logQueueResume()
                     requestUploadDrain()
@@ -263,6 +294,7 @@ class SyncManager private constructor(
             val uid = initializedUid ?: return@launch
             val pendingCount = pendingSyncRepository.countPending(uid)
             _pendingQueueCount.value = pendingCount
+            notifyStateChanged()
             if (pendingCount > 0) {
                 SyncLogger.info("Queue restored: pending=$pendingCount")
             }
@@ -582,7 +614,8 @@ class SyncManager private constructor(
                 val nextOperation = pendingSyncRepository.getNextPending(uid) ?: run {
                     _syncState.value = SyncState.Idle
                     _lastSyncTime.value = System.currentTimeMillis()
-                    yield() // Allow StateFlow collectors to observe the Idle state
+                    notifyStateChanged()
+                    yield()
                     SyncLogger.info("Queue empty")
                     return
                 }
@@ -609,7 +642,8 @@ class SyncManager private constructor(
                 }
 
                 _syncState.value = SyncState.Syncing
-                yield() // Allow StateFlow collectors to observe Syncing before upload
+                notifyStateChanged()
+                yield()
                 val completed = uploadWithRetry(nextOperation, transaction, repository)
                 if (!completed) {
                     return
@@ -618,7 +652,8 @@ class SyncManager private constructor(
                 val completedOperation = pendingSyncRepository.markCompleted(nextOperation)
                 pendingSyncRepository.delete(completedOperation)
                 _pendingQueueCount.value = maxOf(0, _pendingQueueCount.value - 1)
-                yield() // Allow StateFlow collectors to observe the updated count
+                notifyStateChanged()
+                yield()
                 SyncLogger.info(
                     "Upload succeeded: operation=${nextOperation.operationType.name} transactionId=${nextOperation.transactionId}"
                 )
